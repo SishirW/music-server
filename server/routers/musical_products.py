@@ -18,7 +18,7 @@ async def create_product(file: UploadFile, request: schemas.CreateProduct= Depen
     image_name= uuid1()
     with open(f"media/{image_name}.png", "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    new_image= models.Images(name= f"{image_name}.png", url= f"localhost:8000/media/{image_name}.png", parent_id=db.query(models.Products).filter(models.Products.name== request.name).first().id)
+    new_image= models.Images(name= f"{image_name}.png", url= f"/media/{image_name}.png", parent_id=db.query(models.Products).filter(models.Products.name== request.name).first().id)
     db.add(new_image)
     db.commit()
     db.refresh(new_image)
