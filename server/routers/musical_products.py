@@ -3,7 +3,8 @@ from fastapi import APIRouter, HTTPException, Depends, UploadFile, Request, Body
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List,Set, Union 
-from ..schemas import CreateProduct, EditProduct, ShowProduct
+from ..schemas import CreateProduct, EditProduct, ShowProduct, ShowUser
+from .user import get_current_user
 import shutil
 from uuid import uuid1, uuid4
 
@@ -12,7 +13,7 @@ router= APIRouter(prefix= "/products",tags=["Musical products"])
 
 
 @router.post('/',response_description="Add new product")
-async def create_product(request: Request, files: List[UploadFile],product: CreateProduct= Depends()):
+async def create_product(request: Request, files: List[UploadFile],product: CreateProduct= Depends(),current_user: ShowUser = Depends(get_current_user)):
     product.id= uuid.uuid4()
     product= jsonable_encoder(product)
     
@@ -27,7 +28,7 @@ async def create_product(request: Request, files: List[UploadFile],product: Crea
 
 
 @router.get('/',response_description='Get all products', response_model=List[ShowProduct])
-async def get_products(request: Request):
+async def get_products(request: Request,current_user: ShowUser = Depends(get_current_user)):
     products=await request.app.mongodb['Products'].find().to_list(1000)
     return products
 

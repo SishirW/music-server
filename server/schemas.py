@@ -3,7 +3,7 @@ from pydoc import describe
 import uuid
 from bson import ObjectId, _get_float
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional,  Union
 
 
 class CreateProduct(BaseModel):
@@ -41,3 +41,24 @@ class EditProduct(BaseModel):
     description: Optional[str]
     new_image: Optional[str]
     #images:Optional[List]
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: Union[str, None] = None
+
+class CreateUser(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    full_name: str
+    username: str
+    email: str
+    password: str
+
+class ShowUser(BaseModel):
+    full_name: str
+    username: str
+    email: str
+

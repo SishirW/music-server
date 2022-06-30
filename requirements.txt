@@ -4,3 +4,6 @@ sqlalchemy
 python-multipart
 gunicorn
 motor
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart 
