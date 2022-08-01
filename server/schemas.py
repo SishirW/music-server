@@ -34,17 +34,26 @@ class ShowProduct(BaseModel):
     description: str
     images: List
 
+
 class EditProduct(BaseModel):
     name: Optional[str]
     price: Optional[float]
     seller: Optional[str]
     description: Optional[str]
-    new_image: Optional[str]
-    #images:Optional[List]
+    #new_image: Optional[str]
+    images_to_delete:Optional[List[str]]
+
+
+
+class ShowUser(BaseModel):
+    full_name: str
+    username: str
+    email: str
 
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user_info: ShowUser
 
 
 class TokenData(BaseModel):
@@ -57,8 +66,5 @@ class CreateUser(BaseModel):
     email: str
     password: str
 
-class ShowUser(BaseModel):
-    full_name: str
-    username: str
-    email: str
+
 

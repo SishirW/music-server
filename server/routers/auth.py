@@ -10,7 +10,7 @@ from .user import create_access_token,ACCESS_TOKEN_EXPIRE_MINUTES
 router= APIRouter(tags=['Authentication'])
 
 
-@router.post("/token", response_model=Token)
+@router.post("/token",response_model=Token)
 async def login_for_access_token(request :Request,form_data: OAuth2PasswordRequestForm = Depends()):
     user= await request.app.mongodb['Users'].find_one({'username':form_data.username})
     if not user or not verify_password(form_data.password, user['password']):
@@ -23,4 +23,4 @@ async def login_for_access_token(request :Request,form_data: OAuth2PasswordReque
     access_token = create_access_token(
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer","user_info":user}

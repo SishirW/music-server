@@ -1,5 +1,6 @@
+import os
 import uuid
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, Request, Body, status
+from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List,Set, Union 
@@ -28,7 +29,8 @@ async def create_product(request: Request, files: List[UploadFile],product: Crea
 
 
 @router.get('/',response_description='Get all products', response_model=List[ShowProduct])
-async def get_products(request: Request,current_user: ShowUser = Depends(get_current_user)):
+async def get_products(request: Request,response: Response,current_user: ShowUser = Depends(get_current_user)):
+    print('------------------- ',current_user['username'])
     products=await request.app.mongodb['Products'].find().to_list(1000)
     return products
 
@@ -53,19 +55,22 @@ async def delete_product(id: str, request: Request):
 
 
 @router.put('/{id}', response_description='Update Product', response_model=ShowProduct)
-async def edit_product(id: str, request: Request,file: Union[UploadFile, None] = None,product: EditProduct=Depends()):
+async def edit_product(id: str, request: Request,files: Union[List[UploadFile], None]=None,product: EditProduct=Depends()):
+    print('-----------------------------------------',product)
     product= {k: v for k, v in product.dict().items() if v is not None}
-    print('-------------',file)
+    print('-------------',files)
+    if files is not None:
+        for file in files:
+            image_name= uuid4()
+            with open(f"media/{image_name}.png", "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            update_result=await request.app.mongodb['Products'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
     if len(product) >= 1:
         
         update_result = await request.app.mongodb['Products'].update_one(
             {"_id": id}, {"$set": product}
         )
-        if file is not None:
-            image_name= uuid4()
-            with open(f"media/{image_name}.png", "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            update_result=await request.app.mongodb['Products'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
+        
 
         if update_result.modified_count == 1:
             if (
@@ -81,10 +86,16 @@ async def edit_product(id: str, request: Request,file: Union[UploadFile, None] =
     raise HTTPException(status_code=404, detail=f"Product with id {id} not found")
 
 
-@router.put('/{id}/image', response_description='Add an image')
-async def add_image(id: str, request: Request,file: UploadFile):
-    image_name= uuid4()
-    with open(f"media/{image_name}.png", "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    await request.app.mongodb['Products'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
-    return {"success": True, "detail": "Successfully added a new image"}
+@router.delete('/images/{id}')
+async def delete_image(id: str, request: Request,images: List[str],current_user: ShowUser = Depends(get_current_user)): 
+    
+    empty=[]
+    for image in images:
+        update_result=await request.app.mongodb['Products'].update_one({'_id': id}, {'$pull':{'images': image}})
+        os.remove(f"media/{image}")
+        if update_result.modified_count==0: 
+            empty.append(image)
+    if len(empty)==0: 
+        return {"detail":"Successfully deleted image", "not_found":[]}
+    else:
+        return {"detail":"Some images were missing", "not_found":empty}
