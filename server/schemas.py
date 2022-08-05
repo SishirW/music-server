@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional,  Union
 
 
+# Product schemas
+
 class CreateProduct(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
@@ -43,7 +45,14 @@ class EditProduct(BaseModel):
     #new_image: Optional[str]
     images_to_delete:Optional[List[str]]
 
+class CreateProductCategory(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    category: str= Field(...)
 
+class ShowProductCategory(BaseModel):
+    category: str
+
+# User schemas
 
 class ShowUser(BaseModel):
     full_name: str
@@ -67,4 +76,18 @@ class CreateUser(BaseModel):
     password: str
 
 
+
+# Venues Schemas
+class ShowVenue(BaseModel):
+    name: str
+    location: str
+    description: str
+    images: List
+
+class CreateVenue(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    name: str= Field(...)
+    location: str= Field(...)
+    description: str= Field(...)
+    
 

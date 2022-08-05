@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Req
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List,Set, Union 
-from ..schemas import CreateProduct, EditProduct, ShowProduct, ShowUser
+from ..schemas import CreateProduct, CreateProductCategory, EditProduct, ShowProduct, ShowProductCategory, ShowUser
 from .user import get_current_user
 import shutil
 from uuid import uuid1, uuid4
@@ -21,7 +21,7 @@ async def create_product(request: Request, files: List[UploadFile],product: Crea
     new_product= await request.app.mongodb['Products'].insert_one(product)
     for file in files:
         image_name= uuid4()
-        with open(f"media/{image_name}.png", "wb") as buffer:
+        with open(f"media/products/{image_name}.png", "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$push':{'images': f'{image_name}.png'}})
@@ -62,7 +62,7 @@ async def edit_product(id: str, request: Request,files: Union[List[UploadFile], 
     if files is not None:
         for file in files:
             image_name= uuid4()
-            with open(f"media/{image_name}.png", "wb") as buffer:
+            with open(f"media/products/{image_name}.png", "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             update_result=await request.app.mongodb['Products'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
     if len(product) >= 1:
@@ -92,10 +92,36 @@ async def delete_image(id: str, request: Request,images: List[str],current_user:
     empty=[]
     for image in images:
         update_result=await request.app.mongodb['Products'].update_one({'_id': id}, {'$pull':{'images': image}})
-        os.remove(f"media/{image}")
+        os.remove(f"media/products/{image}")
         if update_result.modified_count==0: 
             empty.append(image)
     if len(empty)==0: 
         return {"detail":"Successfully deleted image", "not_found":[]}
     else:
         return {"detail":"Some images were missing", "not_found":empty}
+
+# Product Category
+
+@router.get('/category/',response_description='Get all product categories', response_model=List[ShowProductCategory])
+async def get_product_categories(request: Request):
+    categories=await request.app.mongodb['ProductCategory'].find().to_list(1000)
+    print(categories)
+    return categories
+
+@router.post('/category')
+async def create_product_category(request: Request,category: CreateProductCategory):
+    category.id= uuid.uuid4()
+    category= jsonable_encoder(category)
+    new_category= await request.app.mongodb['ProductCategory'].insert_one(category)
+    return {"success": True}
+
+@router.delete('/category/{name}', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_category(name: str, request: Request):
+    delete_product= await request.app.mongodb['ProductCategory'].delete_one({'category': name})
+    if delete_product.deleted_count==1:
+        return {f"Successfully deleted product with name {name}"}
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with name {name} not found")
+
+
+

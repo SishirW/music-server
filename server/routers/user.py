@@ -1,6 +1,6 @@
 from urllib import request
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Request,status
+from fastapi import APIRouter, Depends, HTTPException, Request,status, Header
 from fastapi.encoders import jsonable_encoder
 from typing import Union
 from datetime import datetime,timedelta
@@ -49,8 +49,8 @@ def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-@router.post('/validate/{token}', response_model=ShowUser)
-async def validate(request: Request,token: str):
+@router.post('/validate', response_model=ShowUser)
+async def validate(request: Request,token: str= Header(default=None)):
     credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
