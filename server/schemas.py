@@ -1,5 +1,6 @@
 from optparse import Option
 from pydoc import describe
+from unicodedata import category
 import uuid
 from bson import ObjectId, _get_float
 from pydantic import BaseModel, Field
@@ -8,12 +9,19 @@ from typing import List, Optional,  Union
 
 # Product schemas
 
+class ProductRating(BaseModel):
+    product_id: str
+    rating: float
+    comment: str
+
 class CreateProduct(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
     price: float= Field(...)
     seller: str= Field(...)
     description: str= Field(...)
+    seller_id: Optional[str]
+    category: str= Field(...)
     
 
     class Config:
@@ -28,14 +36,28 @@ class CreateProduct(BaseModel):
                 
         #     }
         # }
+        orm_mode=True
 
 class ShowProduct(BaseModel):
+    id: str= Field(alias='_id')
     name: str
     price: float
     seller: str
     description: str
     images: List
+    category: str
 
+
+class ShowProductCart(ShowProduct):
+    quantity: int
+
+class ShowProductAdmin(ShowProduct):
+    id: str= Field(alias='_id')
+
+
+
+class OptionalProduct(BaseModel):
+    name: str
 
 class EditProduct(BaseModel):
     name: Optional[str]
@@ -43,7 +65,7 @@ class EditProduct(BaseModel):
     seller: Optional[str]
     description: Optional[str]
     #new_image: Optional[str]
-    images_to_delete:Optional[List[str]]
+    #images_to_delete:Optional[List[str]]
 
 class CreateProductCategory(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
@@ -58,6 +80,18 @@ class ShowUser(BaseModel):
     full_name: str
     username: str
     email: str
+
+class ShowCart(BaseModel):
+    cart: List
+
+class AddToCart(BaseModel):
+    product_id: str
+    quantity: int
+    class Config:
+        orm_mode=True
+
+class ShowUserWithId(ShowUser):
+    id: str= Field(alias='_id')
 
 class Token(BaseModel):
     access_token: str
@@ -74,6 +108,10 @@ class CreateUser(BaseModel):
     username: str
     email: str
     password: str
+    is_seller: bool= False
+    is_venue: bool= False
+    is_superuser: bool= False
+    cart: List=[]
 
 
 

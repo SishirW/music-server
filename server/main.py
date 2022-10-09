@@ -1,6 +1,6 @@
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from server.routers import musical_products,user,auth,venues
+from server.routers import musical_products,user,auth,venues,cart
 from motor.motor_asyncio import AsyncIOMotorClient
 from . import models
 #from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +40,7 @@ async def shutdown_db_client():
     app.mongodb_client.close()
 
 app.include_router(musical_products.router)
+app.include_router(cart.router)
 app.include_router(user.router)
 app.include_router(auth.router)
 app.include_router(venues.router)

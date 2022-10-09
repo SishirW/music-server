@@ -16,7 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 SECRET_KEY = "e59412a8495ec43e79483d7010399e5647cb9199ccd4f2f3d0de8b05dd773f92"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 3000
 
 
 @router.get('/{id}', response_model=ShowUser)
@@ -59,7 +59,6 @@ async def validate(request: Request,token: str= Header(default=None)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        print('-------------------- ',username)
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
@@ -87,6 +86,28 @@ async def get_current_user(request: Request,token: str = Depends(oauth2_scheme))
         raise credentials_exception
     user =await request.app.mongodb['Users'].find_one({'username':username})
     if user is None:
+        raise credentials_exception
+    return user
+
+
+async def validate_seller(request: Request,token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not Authorized",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user =await request.app.mongodb['Users'].find_one({'username':username})
+    if user is None:
+        raise credentials_exception
+    if user['is_seller']==False:
         raise credentials_exception
     return user
 
