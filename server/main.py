@@ -29,9 +29,13 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+connection_string="mongodb+srv://SishirW:JAkJaCmAPcxLoZn8@music.ohrew.mongodb.net/?retryWrites=true&w=majority"
+#connection_string="mongodb://localhost:27017"
+
+
 @app.on_event("startup")
 async def start_database():
-    app.mongodb_client = AsyncIOMotorClient("mongodb://localhost:27017")
+    app.mongodb_client = AsyncIOMotorClient(connection_string)
     app.mongodb = app.mongodb_client["music"]
 
 
