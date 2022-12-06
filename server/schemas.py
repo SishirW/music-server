@@ -5,7 +5,7 @@ import uuid
 from bson import ObjectId, _get_float
 from pydantic import BaseModel, Field
 from typing import List, Optional,  Union
-
+import datetime
 
 # Product schemas
 
@@ -67,6 +67,21 @@ class EditProduct(BaseModel):
     #new_image: Optional[str]
     #images_to_delete:Optional[List[str]]
 
+class OrderProduct(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    product_id: str
+    quantity: int
+    status: str= 'processing'
+    user_id: str
+    type: str
+    date_time: datetime.datetime = datetime.datetime.now()
+
+class GetProductRating(BaseModel):
+    rating: str
+    comment: str
+    user_image: str
+    user_name: str
+
 class CreateProductCategory(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     category: str= Field(...)
@@ -75,12 +90,17 @@ class ShowProductCategory(BaseModel):
     category: str
 
 # User schemas
+class ShowUserType(BaseModel):
+    type: str
 
-class ShowUser(BaseModel):
+class ShowUser(ShowUserType):
     full_name: str
     username: str
     email: str
-
+    
+class EditUserAdditionalDetails(BaseModel):
+    location: Optional[str]
+    phone_no: Optional[str]
 class ShowCart(BaseModel):
     cart: List
 
@@ -104,28 +124,92 @@ class TokenData(BaseModel):
 
 class CreateUser(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
-    full_name: str
-    username: str
-    email: str
-    password: str
-    is_seller: bool= False
-    is_venue: bool= False
-    is_superuser: bool= False
+    full_name: str= Field(...)
+    username: str= Field(...)
+    email: str= Field(...)
+    password: str= Field(...)
+    verified: bool= True
+    type: str= "user"
     cart: List=[]
 
 
 
 # Venues Schemas
+
+
+class VenueSocialMedia(BaseModel):
+    facebook: Optional[str]
+    instagram: Optional[str]
+    tiktok: Optional[str]
+    youtube: Optional[str]
+    twitter: Optional[str]
+
+class VenueRating(BaseModel):
+    venue_id: str
+    rating: float
+    comment: str
+
+class GetVenueRating(BaseModel):
+    rating: str
+    comment: str
+    user_image: str
+    user_name: str
+
 class ShowVenue(BaseModel):
+    id: str= Field(alias='_id')
     name: str
     location: str
     description: str
     images: List
+    todays_schedule: List
+    menu: str
+    video: str
+    social: VenueSocialMedia
+    packages: List
+
+class Schedule(BaseModel):
+    title: str= Field(...)
+    start_time: str=Field(...)
+    end_time: Optional[str]=''
+
+class Package(BaseModel):
+    package: str=Field(...)
+    price: float=Field(...)
 
 class CreateVenue(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
     location: str= Field(...)
     description: str= Field(...)
+    images: Optional[List]=[]
+    todays_schedule: Optional[List[Schedule]]=[]
+    menu: Optional[str]=''
+    video: Optional[str]=''
+    social: VenueSocialMedia
+    packages:Optional[List[Package]]=[]
+
+#Artist 
+class CreateArtist(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    name: str= Field(...)
+    location: str= Field(...)
+    description: str= Field(...)
+    images: Optional[List]=[]
+    followers: Optional[List]=[]
+    following: Optional[List]=[]
+    skills: List
+    looking_for: Optional[List]=[]
+class ShowArtist(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    name: str= Field(...)
+    location: str= Field(...)
+    description: str= Field(...)
+    images: Optional[List]=[]
+    skills: List
+    looking_for: Optional[List]=[]
     
+
+
+    
+
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Req
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional,Set, Union 
-from ..schemas import CreateProduct, CreateProductCategory, EditProduct, OptionalProduct, ProductRating, ShowProduct, ShowProductAdmin, ShowProductCategory, ShowUser, ShowUserWithId
+from ..schemas import GetProductRating, CreateProduct, CreateProductCategory, EditProduct, OptionalProduct, ProductRating, ShowProduct, ShowProductAdmin, ShowProductCategory, ShowUser, ShowUserWithId
 from .user import get_current_user, validate_seller
 import shutil
 from uuid import uuid1, uuid4
@@ -35,33 +35,51 @@ async def create_product(request: Request,product: CreateProduct,current_user: S
 
 
 @router.get('/',response_description='Get all products', response_model=List[ShowProduct])
-async def get_products(request: Request,category: str=None):
+async def get_products(request: Request,page: int=0,category: str=None):
+    p=[]
+    if page is None: 
+        page=0
+    products_per_page=6
+    
     if category is None:
-        products=await request.app.mongodb['Products'].find().to_list(1000)
+        products=request.app.mongodb['Products'].find().skip(page*products_per_page).limit(products_per_page)
+        async for product in products:
+            p.append(product)
+        #print(products)
     else: 
         products=await request.app.mongodb['Products'].find({"category":category}).to_list(1000)
         if(len(products)==0):
             raise HTTPException(status_code=404, detail=f"Products with category {category} not found")
     
-    return parse_obj_as(List[ShowProduct],products)
+    return parse_obj_as(List[ShowProduct],p)
 
 @router.get('/seller',response_description='Get seller products', response_model=List[ShowProductAdmin])
 async def get_products(request: Request,current_user: ShowUser = Depends(validate_seller)):
     products=await request.app.mongodb['Products'].find({"seller_id":current_user['_id']}).to_list(1000)
     return products
 
-@router.get('/zz',response_description='Get all products', response_model=Union[List[ShowProduct], List[OptionalProduct]])
-async def get_products(request: Request,response: Response):
-    products=await request.app.mongodb['Products'].find().to_list(1000)
-    p= parse_obj_as(List[OptionalProduct],products)
-    return p
+
+@router.get('/rate',response_description='View rating of Product',response_model=List[GetProductRating])
+async def get_product_rating(request: Request, id:str,current_user: ShowUser = Depends(get_current_user)):
+    product=await request.app.mongodb['Products'].find_one({"_id": id})
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    ratings=product["rating"]
+    _ratings=[]
+    for rating in ratings:
+        user=await request.app.mongodb['Users'].find_one({"_id": rating["user_id"]})
+        rating["user_image"]="aa"
+        rating["user_name"]=user["full_name"]
+        rating.pop("user_id")
+        _ratings.insert(0,rating)
+    return _ratings
 
 
 @router.get('/{id}', response_model=ShowProduct)
 async def get_product_by_id(id: str, request: Request):
     
     product= await request.app.mongodb['Products'].find_one({"_id":id})
-    print('---------------',product)
+    #print('---------------',product)
     if product is None:
         raise HTTPException(status_code=404, detail=f"Product with id {id} not found")
     return product
@@ -78,8 +96,8 @@ async def delete_product(id: str, request: Request):
 
 
 @router.put('/', response_description='Update Product', response_model=ShowProduct)
-async def edit_product(id: str, request: Request,product: EditProduct=Depends()):
-    print('-----------------------------------------',product)
+async def edit_product(id: str, request: Request,product: EditProduct,current_user: ShowUserWithId = Depends(validate_seller)):
+    #print('-----------------------------------------',product)
     product= {k: v for k, v in product.dict().items() if v is not None}
     
     
@@ -123,10 +141,12 @@ async def rate_product(request: Request, rating: ProductRating,current_user: Sho
     rating.pop('product_id')
     rating['user_id']=current_user['_id']
     r=await request.app.mongodb['Products'].update_one({'_id': pid}, {'$push':{'rating': rating}})
-    print (r.modified_count)
+    #print(r.modified_count)
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     return {'sucess':True}
+
+
 
 @router.delete('/images/{id}')
 async def delete_image(id: str, request: Request,images: List[str],current_user: ShowUser = Depends(get_current_user)): 
@@ -147,7 +167,7 @@ async def delete_image(id: str, request: Request,images: List[str],current_user:
 @router.get('/category/',response_description='Get all product categories', response_model=List[ShowProductCategory])
 async def get_product_categories(request: Request):
     categories=await request.app.mongodb['ProductCategory'].find().to_list(1000)
-    print(categories)
+    #print(categories)
     return categories
 
 @router.post('/category')
