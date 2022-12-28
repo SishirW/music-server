@@ -40,7 +40,15 @@ async def get_cart(request: Request, current_user: ShowUser = Depends(get_curren
                 a['quantity']= data['quantity']
                 cart.append(a) 
         if len(cart)==0:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Cart is empty') 
+            return []
         return cart
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Cart is empty')
+    return []
 
+@router.delete('/')
+async def delete_cart(request: Request, id:str, current_user: ShowUser = Depends(get_current_user)):
+    update_result=await request.app.mongodb['Users'].update_one({'_id':current_user['_id']}, {'$pull':{'cart': {"product_id":id}}})
+    print(update_result.modified_count)
+    if update_result.modified_count==0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return {"success":True}
+        

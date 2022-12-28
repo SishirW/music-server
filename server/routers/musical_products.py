@@ -4,8 +4,8 @@ from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Req
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional,Set, Union 
-from ..schemas import GetProductRating, CreateProduct, CreateProductCategory, EditProduct, OptionalProduct, ProductRating, ShowProduct, ShowProductAdmin, ShowProductCategory, ShowUser, ShowUserWithId
-from .user import get_current_user, validate_seller
+from ..schemas import GetProductRating, CreateProduct,ProductQuestion ,CreateProductCategory, EditProduct, OptionalProduct, ProductRating, ShowProduct, ShowProductAdmin, ShowProductCategory, ShowUser, ShowUserWithId
+from .user import get_current_user, validate_seller,validate_admin
 import shutil
 from uuid import uuid1, uuid4
 from pydantic import parse_obj_as,Field
@@ -16,7 +16,7 @@ router= APIRouter(prefix= "/products",tags=["Musical products"])
 
 
 @router.post('/',response_description="Add new product")
-async def create_product(request: Request,product: CreateProduct,current_user: ShowUserWithId = Depends(validate_seller)):
+async def create_product(request: Request,product: CreateProduct,current_user: ShowUserWithId = Depends(validate_admin)):
     print(current_user)
     product.id= uuid.uuid4()
     product= jsonable_encoder(product)
@@ -34,33 +34,100 @@ async def create_product(request: Request,product: CreateProduct,current_user: S
 
 
 
-@router.get('/',response_description='Get all products', response_model=List[ShowProduct])
-async def get_products(request: Request,page: int=0,category: str=None):
+@router.get('/',response_description='Get all products')
+async def get_products(request: Request,page: int=1,category: str=None,search:str=None):
+    if page==0:
+        page=1
+    p=[]
+    test={"has_next": False}
+    if page is None: 
+        page=0
+    products_per_page=2
+    print(category)
+    if search !=None:
+        products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*products_per_page).limit(products_per_page)
+        count=0
+        
+        async for product in product2:
+            count+=1
+        
+        if count==0:
+            test['has_next']=False
+        else:
+            test['has_next']=True
+        async for product in products:
+            p.append(product)
+        test['products']=p
+        return test
+    if category !=None:
+        products=request.app.mongodb['Products'].find({"category":category}).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['Products'].find({"category":category}).skip((page)*products_per_page).limit(products_per_page)
+        
+        count=0
+        count2=0
+        async for product in product2:
+            count+=1
+        
+        if count==0:
+            test['has_next']=False
+        else:
+            test['has_next']=True
+        
+        
+        async for product in products:
+            p.append(product)
+        test['products']=p
+    
+        return test
+    
+    products=request.app.mongodb['Products'].find().skip((page-1)*products_per_page).limit(products_per_page)
+    product2=request.app.mongodb['Products'].find().skip((page)*products_per_page).limit(products_per_page)
+    
+    count=0
+    
+    async for product in product2:
+        count+=1
+    
+    if count==0:
+        test['has_next']=False
+    else:
+        test['has_next']=True
+    
+    
+    async for product in products:
+        p.append(product)
+    test['products']=p
+    return test
+        #print(products)
+        # products=await request.app.mongodb['Products'].find({"category":category}).to_list(1000)
+        # if(len(products)==0):
+        #     raise HTTPException(status_code=404, detail=f"Products with category {category} not found")
+        
+
+@router.get('/search/{value}',response_description='Get products by search', response_model=List[ShowProduct])
+async def get_products(request: Request,value: str,page: int=0):
     p=[]
     if page is None: 
         page=0
     products_per_page=6
     
-    if category is None:
-        products=request.app.mongodb['Products'].find().skip(page*products_per_page).limit(products_per_page)
-        async for product in products:
-            p.append(product)
-        #print(products)
-    else: 
-        products=await request.app.mongodb['Products'].find({"category":category}).to_list(1000)
-        if(len(products)==0):
-            raise HTTPException(status_code=404, detail=f"Products with category {category} not found")
     
-    return parse_obj_as(List[ShowProduct],p)
+    products=await request.app.mongodb['Products'].find({"name":{"$regex":f".*{value}.*",'$options': 'i'}}).to_list(1000)
+    print(products)
+    if(len(products)==0):
+        raise HTTPException(status_code=404, detail=f"Products with query {value} not found")
+    
+    return products
 
-@router.get('/seller',response_description='Get seller products', response_model=List[ShowProductAdmin])
-async def get_products(request: Request,current_user: ShowUser = Depends(validate_seller)):
-    products=await request.app.mongodb['Products'].find({"seller_id":current_user['_id']}).to_list(1000)
+@router.get('/admin',response_description='Get seller products', response_model=List[ShowProductAdmin])
+async def get_products(request: Request,current_user: ShowUser = Depends(validate_admin)):
+    products=await request.app.mongodb['Products'].find().to_list(10000000)
     return products
 
 
 @router.get('/rate',response_description='View rating of Product',response_model=List[GetProductRating])
-async def get_product_rating(request: Request, id:str,current_user: ShowUser = Depends(get_current_user)):
+async def get_product_rating(request: Request, id:str):
     product=await request.app.mongodb['Products'].find_one({"_id": id})
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
@@ -73,6 +140,21 @@ async def get_product_rating(request: Request, id:str,current_user: ShowUser = D
         rating.pop("user_id")
         _ratings.insert(0,rating)
     return _ratings
+
+@router.get('/questions',response_description='View questions of Product')
+async def get_product_questions(request: Request, id:str):
+    product=await request.app.mongodb['Products'].find_one({"_id": id})
+    if product is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    questions=product["questions"]
+    _questions=[]
+    for question in questions:
+        user=await request.app.mongodb['Users'].find_one({"_id": question["user_id"]})
+        question["user_image"]="aa"
+        question["user_name"]=user["full_name"]
+        question.pop("user_id")
+        _questions.append(question)
+    return _questions
 
 
 @router.get('/{id}', response_model=ShowProduct)
@@ -96,7 +178,7 @@ async def delete_product(id: str, request: Request):
 
 
 @router.put('/', response_description='Update Product', response_model=ShowProduct)
-async def edit_product(id: str, request: Request,product: EditProduct,current_user: ShowUserWithId = Depends(validate_seller)):
+async def edit_product(id: str, request: Request,product: EditProduct,current_user: ShowUserWithId = Depends(validate_admin)):
     #print('-----------------------------------------',product)
     product= {k: v for k, v in product.dict().items() if v is not None}
     
@@ -145,6 +227,22 @@ async def rate_product(request: Request, rating: ProductRating,current_user: Sho
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     return {'sucess':True}
+
+@router.put('/questions',response_description='Questions Product')
+async def question_product(request: Request, questions: ProductQuestion,current_user: ShowUser = Depends(get_current_user)):
+    questions= jsonable_encoder(questions)
+    pid=questions['product_id']
+    questions.pop('product_id')
+    questions['user_id']=current_user['_id']
+    if current_user['type']=='admin':
+        questions['answer']=True
+    else:
+        questions['answer']=False
+    r=await request.app.mongodb['Products'].update_one({'_id': pid}, {'$push':{'questions': questions}})
+    #print(r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    return {'success':True}
 
 
 

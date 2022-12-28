@@ -5,7 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from typing import Union
 from datetime import datetime,timedelta
 from jose import JWTError, jwt
-from ..schemas import CreateUser,ShowUser, ShowUserType, TokenData, Token,EditUserAdditionalDetails
+from ..schemas import CreateUser,ShowUser, ShowUserType, TokenData, Token,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserDetails
 from ..password_methods import get_password_hash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
@@ -88,6 +88,26 @@ async def validate(request: Request,token: str= Header(default=None)):
 
 
 async def get_current_user(request: Request,token: str = Depends(oauth2_scheme)):
+    print(token)
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user =await request.app.mongodb['Users'].find_one({'username':username})
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def get_details(request: Request,token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -147,7 +167,6 @@ async def validate_artist(request: Request,token: str = Depends(oauth2_scheme)):
     user =await request.app.mongodb['Users'].find_one({'username':username})
     if user is None:
         raise credentials_exception
-    print(user)
     if user['type']!="artist":
         raise credentials_exception
     return user
@@ -171,6 +190,27 @@ async def validate_venue(request: Request,token: str = Depends(oauth2_scheme)):
     if user is None:
         raise credentials_exception
     if user['type']!="venue":
+        raise credentials_exception
+    return user
+
+async def validate_admin(request: Request,token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not Authorized",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    user =await request.app.mongodb['Users'].find_one({'username':username})
+    if user is None:
+        raise credentials_exception
+    if user['type']!="admin":
         raise credentials_exception
     return user
 
@@ -208,10 +248,24 @@ async def edit_additional_details(request: Request, detail: EditUserAdditionalDe
 
     raise HTTPException(status_code=404, detail=f"User with id {id} not found")
 
+
+@router.get('/get_details', response_model=ShowUserDetails)
+async def get_user_details(request: Request,current_user: ShowUser = Depends(get_current_user)):
+    user=await request.app.mongodb['Users'].find_one({"_id":current_user["_id"]})
+    if user is None: 
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    return user
+
 @router.get('/get_additional_details', response_model=EditUserAdditionalDetails)
 async def get_user_additional_details(request: Request,current_user: ShowUser = Depends(get_current_user)):
-    print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$',current_user)
     user=await request.app.mongodb['Users'].find_one({"_id":current_user["_id"]})
+    if user is None: 
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    return user
+
+@router.get('/get_additional_details_admin', response_model=GetAdditionalDetails)
+async def get_user_additional_details(request: Request,id: str,current_user: ShowUser = Depends(validate_admin)):
+    user=await request.app.mongodb['Users'].find_one({"_id":id})
     if user is None: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
     return user
