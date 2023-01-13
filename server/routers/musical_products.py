@@ -23,7 +23,7 @@ async def create_product(request: Request,product: CreateProduct,current_user: S
     
     new_product= await request.app.mongodb['Products'].insert_one(product)
     #await request.app.mongodb['Products'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [],'seller_id':current_user['_id'],'rating':[]}})
+    await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [],'seller_id':current_user['_id'], 'avg_rating': 0.0,'no_of_rating':0 ,'rating':[],'questions':[]}})
     # for file in files:
     #     image_name= uuid4()
     #     with open(f"media/products/{image_name}.png", "wb") as buffer:
@@ -35,23 +35,28 @@ async def create_product(request: Request,product: CreateProduct,current_user: S
 
 
 @router.get('/',response_description='Get all products')
-async def get_products(request: Request,page: int=1,category: str=None,search:str=None):
+async def get_products(request: Request,page: int=1,sort:int=0,category: str=None,search:str=None,admin: bool=False):
     if page==0:
         page=1
     p=[]
     test={"has_next": False}
     if page is None: 
         page=0
-    products_per_page=2
-    print(category)
+    products_per_page=11
     if search !=None:
-        products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*products_per_page).limit(products_per_page)
-        product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*products_per_page).limit(products_per_page)
+        if sort==0:
+            products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*products_per_page).limit(products_per_page)
+        elif sort==1:
+            products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+        else:
+            products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
         count=0
         
         async for product in product2:
             count+=1
-        
         if count==0:
             test['has_next']=False
         else:
@@ -61,9 +66,15 @@ async def get_products(request: Request,page: int=1,category: str=None,search:st
         test['products']=p
         return test
     if category !=None:
-        products=request.app.mongodb['Products'].find({"category":category}).skip((page-1)*products_per_page).limit(products_per_page)
-        product2=request.app.mongodb['Products'].find({"category":category}).skip((page)*products_per_page).limit(products_per_page)
-        
+        if sort==0:
+            products=request.app.mongodb['Products'].find({"category":category}).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find({"category":category}).skip((page)*products_per_page).limit(products_per_page)
+        elif sort==1:
+             products=request.app.mongodb['Products'].find({"category":category}).sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
+             product2=request.app.mongodb['Products'].find({"category":category}).sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+        else:
+            products=request.app.mongodb['Products'].find({"category":category}).sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find({"category":category}).sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
         count=0
         count2=0
         async for product in product2:
@@ -80,10 +91,21 @@ async def get_products(request: Request,page: int=1,category: str=None,search:st
         test['products']=p
     
         return test
-    
-    products=request.app.mongodb['Products'].find().skip((page-1)*products_per_page).limit(products_per_page)
-    product2=request.app.mongodb['Products'].find().skip((page)*products_per_page).limit(products_per_page)
-    
+    products={}
+    product2={}
+    if sort==0:
+        if admin:
+            products=request.app.mongodb['Products'].find().skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find().skip((page)*products_per_page).limit(products_per_page)
+        else:
+            products=request.app.mongodb['Products'].find().sort([('avg_rating',-1),('_id',1)]).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find().sort([('avg_rating',-1),('_id',1)]).skip((page)*products_per_page).limit(products_per_page)
+    elif sort==1:
+        products=request.app.mongodb['Products'].find().sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['Products'].find().sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+    else:
+        products=request.app.mongodb['Products'].find().sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['Products'].find().sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
     count=0
     
     async for product in product2:
@@ -120,10 +142,9 @@ async def get_products(request: Request,value: str,page: int=0):
     
     return products
 
-@router.get('/admin',response_description='Get seller products', response_model=List[ShowProductAdmin])
-async def get_products(request: Request,current_user: ShowUser = Depends(validate_admin)):
-    products=await request.app.mongodb['Products'].find().to_list(10000000)
-    return products
+# @router.get('/admin',response_description='Get seller products', response_model=List[ShowProductAdmin])
+# async def get_products_admin(request: Request,page: int=1,sort:int=0,category: str=None,search:str=None,current_user: ShowUserWithId = Depends(validate_admin)):
+    
 
 
 @router.get('/rate',response_description='View rating of Product',response_model=List[GetProductRating])
@@ -135,10 +156,11 @@ async def get_product_rating(request: Request, id:str):
     _ratings=[]
     for rating in ratings:
         user=await request.app.mongodb['Users'].find_one({"_id": rating["user_id"]})
-        rating["user_image"]="aa"
-        rating["user_name"]=user["full_name"]
-        rating.pop("user_id")
-        _ratings.insert(0,rating)
+        if user is not None:
+            rating["user_image"]="aa"
+            rating["user_name"]=user["full_name"]
+            rating.pop("user_id")
+            _ratings.insert(0,rating)
     return _ratings
 
 @router.get('/questions',response_description='View questions of Product')
@@ -150,10 +172,11 @@ async def get_product_questions(request: Request, id:str):
     _questions=[]
     for question in questions:
         user=await request.app.mongodb['Users'].find_one({"_id": question["user_id"]})
-        question["user_image"]="aa"
-        question["user_name"]=user["full_name"]
-        question.pop("user_id")
-        _questions.append(question)
+        if user is not None:
+            question["user_image"]="aa"
+            question["user_name"]=user["full_name"]
+            question.pop("user_id")
+            _questions.append(question)
     return _questions
 
 
@@ -223,10 +246,23 @@ async def rate_product(request: Request, rating: ProductRating,current_user: Sho
     rating.pop('product_id')
     rating['user_id']=current_user['_id']
     r=await request.app.mongodb['Products'].update_one({'_id': pid}, {'$push':{'rating': rating}})
+    
     #print(r.modified_count)
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    return {'sucess':True}
+    
+    product= await request.app.mongodb['Products'].find_one({"_id":pid})
+    ratings=0.0
+    count=0
+    for rating in product['rating']:
+        ratings=ratings+rating['rating']
+        count+=1
+    if ratings==0:
+        avg=0
+    else:
+        avg= ratings/count
+    r=await request.app.mongodb['Products'].update_one({'_id': pid}, {'$set':{'avg_rating': avg,'no_of_rating':count}})
+    return {'success':True}
 
 @router.put('/questions',response_description='Questions Product')
 async def question_product(request: Request, questions: ProductQuestion,current_user: ShowUser = Depends(get_current_user)):
@@ -269,14 +305,15 @@ async def get_product_categories(request: Request):
     return categories
 
 @router.post('/category')
-async def create_product_category(request: Request,category: CreateProductCategory):
+async def create_product_category(request: Request,category: CreateProductCategory, current_user: ShowUserWithId = Depends(validate_admin)):
     category.id= uuid.uuid4()
     category= jsonable_encoder(category)
+    category['category']=category['category'].lower()
     new_category= await request.app.mongodb['ProductCategory'].insert_one(category)
     return {"success": True}
 
 @router.delete('/category/{name}', status_code=status.HTTP_204_NO_CONTENT)
-async def delete_product_category(name: str, request: Request):
+async def delete_product_category(name: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
     delete_product= await request.app.mongodb['ProductCategory'].delete_one({'category': name})
     if delete_product.deleted_count==1:
         return {f"Successfully deleted product with name {name}"}

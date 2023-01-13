@@ -2,10 +2,10 @@ from urllib import request
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request,status, Header
 from fastapi.encoders import jsonable_encoder
-from typing import Union
+from typing import Union,List
 from datetime import datetime,timedelta
 from jose import JWTError, jwt
-from ..schemas import CreateUser,ShowUser, ShowUserType, TokenData, Token,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserDetails
+from ..schemas import CreateUser,ShowUser, ShowUserType, ShowUserDetailsAdmin,ShowUserWithId,TokenData, Token,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserDetails
 from ..password_methods import get_password_hash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
@@ -25,7 +25,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 3000
 #     if user is None: 
 #         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 #     return user
-
 
 
 
@@ -249,6 +248,48 @@ async def edit_additional_details(request: Request, detail: EditUserAdditionalDe
     raise HTTPException(status_code=404, detail=f"User with id {id} not found")
 
 
+@router.get('/',response_description='Get all users',response_model=ShowUserDetailsAdmin)
+async def get_users(request: Request,page: int=1,search:str=None,current_user: ShowUserWithId = Depends(validate_admin)):
+    if page==0:
+        page=1
+    p=[]
+    test={"has_next": False}
+    if page is None: 
+        page=0
+    users_per_page=3
+    if search!=None:
+        users=request.app.mongodb['Users'].find({"$or":[{"username":{"$regex":f".*{search}.*",'$options': 'i'}},{"email":{"$regex":f".*{search}.*",'$options': 'i'}}]}).skip((page-1)*users_per_page).limit(users_per_page)
+        user2=request.app.mongodb['Users'].find({"$or":[{"username":{"$regex":f".*{search}.*",'$options': 'i'}},{"email":{"$regex":f".*{search}.*",'$options': 'i'}}]}).skip((page)*users_per_page).limit(users_per_page)
+        count=0
+        async for user in user2:
+            count+=1
+        if count==0:
+            test['has_next']=False
+        else:
+            test['has_next']=True
+        async for user in users:
+            p.append(user)
+        test['users']=p
+        return test
+    
+
+    users=request.app.mongodb['Users'].find().skip((page-1)*users_per_page).limit(users_per_page)
+    user2=request.app.mongodb['Users'].find().skip((page)*users_per_page).limit(users_per_page)
+    count=0
+    async for user in user2:
+        count+=1
+    if count==0:
+        test['has_next']=False
+    else:
+        test['has_next']=True
+    async for user in users:
+        p.append(user)
+    test['users']=p
+    return test
+    
+
+
+
 @router.get('/get_details', response_model=ShowUserDetails)
 async def get_user_details(request: Request,current_user: ShowUser = Depends(get_current_user)):
     user=await request.app.mongodb['Users'].find_one({"_id":current_user["_id"]})
@@ -269,3 +310,22 @@ async def get_user_additional_details(request: Request,id: str,current_user: Sho
     if user is None: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
     return user
+
+@router.delete('/',status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(request: Request,id: str,current_user: ShowUser = Depends(validate_admin)):
+    user_check=await request.app.mongodb['Users'].find_one({'_id':id})
+    
+    if user_check is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User not found")
+    if user_check['_id']==current_user['_id']:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Forbidden")
+    type= user_check['type']
+    delete_user= await request.app.mongodb['Users'].delete_one({'_id': id})
+    if type== 'venue':
+        delete_venue= await request.app.mongodb['Venues'].delete_one({'owner_id': id})
+    if type== 'artist':
+        delete_artist= await request.app.mongodb['Artist'].delete_one({'artist_id': id})
+    if delete_user.deleted_count==1:
+        return {f"Successfully deleted user with id {id}"}
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {id} not found")

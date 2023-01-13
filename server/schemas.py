@@ -30,6 +30,7 @@ class CreateProduct(BaseModel):
     description: str= Field(...)
     seller_id: Optional[str]
     category: str= Field(...)
+    #avg_rating: Optional[float]=0.0
     
 
     class Config:
@@ -154,6 +155,19 @@ class CreateUser(BaseModel):
     following: Optional[List]=[]
 
 
+class UserDetails(BaseModel):
+    id: str= Field(alias='_id')
+    full_name: str
+    username: str
+    email: str
+    type: str
+    verified: bool
+    location: str
+    phone_no : str
+
+class ShowUserDetailsAdmin(BaseModel):
+    has_next: bool
+    users:List[UserDetails]
 # Venues Schemas
 
 
@@ -177,12 +191,18 @@ class GetVenueRating(BaseModel):
 
 class Package(BaseModel):
     id: str= Field(alias='_id')
-    package: str=Field(...)
+    #venue_id: str= Field(...)
+    name: str=Field(...)
     price: float=Field(...)
     time: str=Field(...)
     valid: Optional[bool]=True
     bookings: Optional[List]=[]
-
+    
+class EditPackage(BaseModel):
+    name: Optional[str]
+    price: Optional[float]
+    time: Optional[str]
+    valid: Optional[bool]
 
 class ShowVenue(BaseModel):
     id: str= Field(alias='_id')
@@ -234,7 +254,15 @@ class CreateVenue(BaseModel):
     menu: Optional[str]=''
     video: Optional[str]=''
     social: VenueSocialMedia
-    packages:Optional[List[Package]]=[]
+    category: str= Field(...)
+    # packages:Optional[List[Package]]=[]
+
+class CreateFeatured(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    venue_id: str
+    package_id: Optional[str]
+    type: str="venue"
+    image: str
 
 class CreateVenueCategory(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
@@ -253,11 +281,13 @@ class CreateArtist(BaseModel):
     name: str= Field(...)
     location: str= Field(...)
     description: str= Field(...)
+    category: str= Field(...)
     images: Optional[List]=[]
     followers: Optional[List[Followers]]=[]
     following: Optional[List]=[]
     skills: List
     looking_for: Optional[List]=[]
+    featured: Optional[bool]=False
 class ShowArtist(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
@@ -267,6 +297,17 @@ class ShowArtist(BaseModel):
     skills: List
     looking_for: Optional[List]=[]
     follows: bool
+    following_no: int
+    followers_no: int
+    featured: bool
+    category: str
+
+class CreateArtistCategory(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    category: str= Field(...)
+
+class ShowArtistCategory(BaseModel):
+    category: str
     
 class Followers(BaseModel):
     id: str= Field(...)
@@ -274,4 +315,58 @@ class Followers(BaseModel):
 
     
 
+# Grow
 
+class GrowForm(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    name: str= Field(...)
+    type: str= Field(...)
+    instrument: Optional[str]=''
+    category: str= Field(...)
+    email: str= Field(...)
+    phone: int= Field(...)
+    location: str= Field(...)
+    description: str= Field(...)
+    previous_course: str= Field(...)
+
+
+
+# Used product
+class CreateUsedProduct(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    name: str= Field(...)
+    price: float= Field(...)
+    seller: str= Field(...)
+    description: str= Field(...)
+    seller_id: Optional[str]
+    category: str= Field(...)
+    
+
+    class Config:
+        allow_population_by_field_name = True
+        # schema_extra = {
+        #     "example": {
+        #         "id": "00010203-0405-0607-0809-0a0b0c0d0e0f",
+        #         "name": "Piano",
+        #         "price" :10000,
+        #         "seller": "Shop",
+        #         "description": "hdhsgh dgshgds ",
+                
+        #     }
+        # }
+        orm_mode=True
+
+class ShowUsedProduct(BaseModel):
+    id: str= Field(alias='_id')
+    name: str
+    price: float
+    seller: str
+    description: str
+    images: List
+    category: str
+
+class EditUsedProduct(BaseModel):
+    name: Optional[str]
+    price: Optional[float]
+    seller: Optional[str]
+    description: Optional[str]

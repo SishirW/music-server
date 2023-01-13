@@ -36,9 +36,7 @@ async def get_current_orders(request: Request,current_user: ShowUser = Depends(g
     
     for order_id in user['orders']:
         order= await request.app.mongodb['Orders'].find_one({"_id":order_id})
-        if order is None: 
-            raise HTTPException(status_code=404, detail="Order with id {} not found".format(order_id))
-        if order["status"]=="processing":
+        if order is not None and order["status"]=="processing":   
             for p in order["product_ids"]:
                 product= await request.app.mongodb['Products'].find_one({"_id":p["id"]})
                 if product is not None:   
@@ -56,32 +54,25 @@ async def get_current_orders(request: Request,current_user: ShowUser = Depends(g
 async def get_order_history(request: Request,current_user: ShowUser = Depends(get_current_user)):
     orders=[]
     user= await request.app.mongodb['Users'].find_one({"_id":current_user['_id']})
-    
-    
     for order_id in user['orders']:
         order= await request.app.mongodb['Orders'].find_one({"_id":order_id})
-        if order is None: 
-            raise HTTPException(status_code=404, detail="Order with id {} not found".format(order_id))
-        if order["status"]=="success" or order["status"]=="canceled":
-            product= await request.app.mongodb['Products'].find_one({"_id":order["product_id"]})
-            if product is None: 
-                raise HTTPException(status_code=404, detail="Product with id {} not found".format(order["product_id"]))
-            
-            orders.append({"_id":order["product_id"],
-            "name":product["name"],
-            "price":product["price"],
-            "date": order["date_time"],
-            "status":order["status"],
-            "type":order["type"] ,
-            "image": product["images"][0]})
+        if order is not None and order["status"]=="complete" or order["status"]=="cancelled":   
+            for p in order["product_ids"]:
+                product= await request.app.mongodb['Products'].find_one({"_id":p["id"]})
+                if product is not None:   
+                    orders.append({"_id":order["_id"],
+                    "name":product["name"],
+                    "price":product["price"],
+                    "date": order["date_time"],
+                    "status":order["status"],
+                    "type":order["type"] ,
+                    "image": product["images"][0]})
     return orders
 
 
 @router.get('/processing')
 async def get_processing_orders(request: Request,current_user: ShowUser = Depends(validate_admin)):
-    
-    order= await request.app.mongodb['Orders'].find().sort('date_time', 1).to_list(1000)
-    
+    order= await request.app.mongodb['Orders'].find({'status':'processing'}).sort('date_time', 1).to_list(1000)
     return order
 
 @router.get('/processing_detail')
@@ -107,3 +98,15 @@ async def get_processing_orders_detail(request: Request,id: str,current_user: Sh
     #         detail.append(dict1)
     # return detail
     return order
+
+
+@router.put('/complete_order',response_description='Complete product Order')
+async def complete_order(request: Request, id: str,type: int=0,current_user: ShowUser = Depends(validate_admin)):
+    if type==0:
+        r=await request.app.mongodb['Orders'].update_one({'_id': id},{'$set':{'status': 'complete'}})
+    else:
+        r=await request.app.mongodb['Orders'].update_one({'_id': id},{'$set':{'status': 'cancelled'}})
+    print (r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    return {'success':True}
