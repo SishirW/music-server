@@ -12,15 +12,17 @@ from .user import get_current_user,validate_admin
 router= APIRouter(prefix= "/venues",tags=["Venues"])
 
 @router.post('/')
-async def create_venue(request: Request, venue: CreateVenue,current_user: ShowUserWithId = Depends(validate_venue)):
+async def create_venue(request: Request, venue: CreateVenue,current_user: ShowUserWithId = Depends(get_current_user)):
     venue.id= uuid4()
     venue= jsonable_encoder(venue)
     # venue_check=await request.app.mongodb['Venues'].find_one({'owner_id':current_user['_id']})
     # if venue_check is not None:
     #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User already has venue")
     new_venue= await request.app.mongodb['Venues'].insert_one(venue)
+    await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$set':{'type': 'venue'}})
+
     print('-------------------------',new_venue.inserted_id)
-    await request.app.mongodb['Venues'].update_one({'_id': new_venue.inserted_id}, {'$set':{'owner_id':current_user['_id'], 'avg_rating': 0.0,'no_of_rating':0,'rating':[],'packages': [] }})
+    await request.app.mongodb['Venues'].update_one({'_id': new_venue.inserted_id}, {'$set':{'owner_id':current_user['_id'], "validate":True,'avg_rating': 0.0,'no_of_rating':0,'rating':[],'packages': [] }})
     return {"success": True, "id":new_venue.inserted_id}
 
 
@@ -50,11 +52,11 @@ async def get_venues(request: Request,page: int=1,category: str=None,search:str=
     test={"has_next": False}
     if page is None: 
         page=0
-    venues_per_page=5
+    venues_per_page=10
 
     if search !=None:
-        venues=request.app.mongodb['Venues'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*venues_per_page).limit(venues_per_page)
-        venue2=request.app.mongodb['Venues'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*venues_per_page).limit(venues_per_page)
+        venues=request.app.mongodb['Venues'].find({"validate":True,"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*venues_per_page).limit(venues_per_page)
+        venue2=request.app.mongodb['Venues'].find({"validate":True,"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*venues_per_page).limit(venues_per_page)
         count=0
         async for venue in venues:
             for package in venue['packages']:
@@ -72,8 +74,8 @@ async def get_venues(request: Request,page: int=1,category: str=None,search:str=
         test['venues']=p
         return test
     if category!=None:
-        venues=request.app.mongodb['Venues'].find({"category":category}).skip((page-1)*venues_per_page).limit(venues_per_page)
-        venue2=request.app.mongodb['Venues'].find({"category":category}).skip((page)*venues_per_page).limit(venues_per_page)
+        venues=request.app.mongodb['Venues'].find({"validate":True,"category":category}).skip((page-1)*venues_per_page).limit(venues_per_page)
+        venue2=request.app.mongodb['Venues'].find({"validate":True,"category":category}).skip((page)*venues_per_page).limit(venues_per_page)
         count=0
         async for venue in venues:
             for package in venue['packages']:
@@ -90,11 +92,11 @@ async def get_venues(request: Request,page: int=1,category: str=None,search:str=
         test['venues']=p
         return test
     if admin:
-        venues=request.app.mongodb['Venues'].find().skip((page-1)*venues_per_page).limit(venues_per_page)
-        venue2=request.app.mongodb['Venues'].find().skip((page)*venues_per_page).limit(venues_per_page)
+        venues=request.app.mongodb['Venues'].find({"validate":True}).skip((page-1)*venues_per_page).limit(venues_per_page)
+        venue2=request.app.mongodb['Venues'].find({"validate":True}).skip((page)*venues_per_page).limit(venues_per_page)
     else:
-        venues=request.app.mongodb['Venues'].find().sort([('avg_rating',-1),('_id',1)]).skip((page-1)*venues_per_page).limit(venues_per_page)
-        venue2=request.app.mongodb['Venues'].find().sort([('avg_rating',-1),('_id',1)]).skip((page)*venues_per_page).limit(venues_per_page)
+        venues=request.app.mongodb['Venues'].find({"validate":True}).sort([('avg_rating',-1),('_id',1)]).skip((page-1)*venues_per_page).limit(venues_per_page)
+        venue2=request.app.mongodb['Venues'].find({"validate":True}).sort([('avg_rating',-1),('_id',1)]).skip((page)*venues_per_page).limit(venues_per_page)
     count=0
     async for venue in venues:
        # print(venue)
@@ -292,30 +294,44 @@ async def delete_featured_venue(id: str, request: Request,current_user: ShowUser
 
 
 @router.put('/images/',response_description='Update Venue image')
-async def add_venue_images(request: Request, id: str, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
+async def add_venue_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
+    
+    names=[]
     if files is not None: 
         for file in files:
                 image_name= uuid4()
                 with open(f"media/venues/{image_name}.png", "wb") as buffer:
                     shutil.copyfileobj(file.file, buffer)
-                update_result=await request.app.mongodb['Venues'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
-                if update_result.matched_count==0: 
-                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Venue with id {id} not found')
-        return {"Successfully added new images"}
+                names.append(f"{image_name}.png")
+        return {"success":True, "images":names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 
+@router.put('/menu-images/',response_description='Update Venue Menu image')
+async def add_venue_menu_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
+   
+    names=[]
+    if files is not None: 
+        for file in files:
+                image_name= uuid4()
+                with open(f"media/venues/{image_name}.png", "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                names.append(f"{image_name}.png")
+        return {"success":True, "images":names}
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
+
+
 @router.put('/featured/images/',response_description='Add Featured Venue image')
-async def add_featured_venue_images(request: Request, id: str, file: UploadFile,current_user: ShowUserWithId = Depends(validate_admin)):
-    venue_check=await request.app.mongodb['FeaturedVenues'].find_one({"_id":id})
-    if venue_check is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+async def add_featured_venue_images(request: Request, file: UploadFile,current_user: ShowUserWithId = Depends(validate_admin)):
+    # venue_check=await request.app.mongodb['FeaturedVenues'].find_one({"_id":id})
+    # if venue_check is None:
+    #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
     if file is not None: 
         image_name= uuid4()
         with open(f"media/featured_venues/{image_name}.png", "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        update_result=await request.app.mongodb['FeaturedVenues'].update_one({'_id': id}, {'$set':{'image': f'{image_name}.png'}})
-        if update_result.matched_count==0: 
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Featured Venue with id {id} not found')
+        # update_result=await request.app.mongodb['FeaturedVenues'].update_one({'_id': id}, {'$set':{'image': f'{image_name}.png'}})
+        # if update_result.matched_count==0: 
+        #         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Featured Venue with id {id} not found')
         return {"name": f"{image_name}.png"}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 

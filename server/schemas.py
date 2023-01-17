@@ -251,7 +251,7 @@ class CreateVenue(BaseModel):
     description: str= Field(...)
     images: Optional[List]=[]
     todays_schedule: Optional[List[Schedule]]=[]
-    menu: Optional[str]=''
+    menu: Optional[List]=[]
     video: Optional[str]=''
     social: VenueSocialMedia
     category: str= Field(...)

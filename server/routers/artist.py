@@ -9,13 +9,13 @@ router= APIRouter(prefix= "/artist",tags=["Artist"])
 from jose import JWTError, jwt
 
 @router.post('/',response_description="Add new artist")
-async def create_artist(request: Request,artist: CreateArtist,current_user: ShowUserWithId = Depends(validate_artist)):
+async def create_artist(request: Request,artist: CreateArtist,current_user: ShowUserWithId = Depends(get_current_user)):
     print(current_user)
     artist.id= uuid.uuid4()
     artist= jsonable_encoder(artist)
-    artist_check=await request.app.mongodb['Artist'].find_one({'artist_id':current_user['_id']})
-    if artist_check is not None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User already has artist")
+    # artist_check=await request.app.mongodb['Artist'].find_one({'artist_id':current_user['_id']})
+    # if artist_check is not None:
+    #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User already has artist")
     # artist_check= await request.app.mongodb['Artist'].find_one({"artist_id":current_user['_id']})
     # print(artist_check)
     # if artist_check is not None:
@@ -23,9 +23,10 @@ async def create_artist(request: Request,artist: CreateArtist,current_user: Show
     #         status_code=status.HTTP_403_FORBIDDEN,
     #         detail="Forbidden",
     #     )
+    await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$set':{'type': 'artist'}})
     new_artist= await request.app.mongodb['Artist'].insert_one(artist)
     #await request.app.mongodb['artists'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['Artist'].update_one({'_id': new_artist.inserted_id}, {'$set':{'images': [],'artist_id':current_user['_id'],'rating':[],'followers_count':0}})
+    await request.app.mongodb['Artist'].update_one({'_id': new_artist.inserted_id}, {'$set':{'artist_id':current_user['_id'],'rating':[],'followers_count':0}})
     # for file in files:
     #     image_name= uuid4()
     #     with open(f"media/artists/{image_name}.png", "wb") as buffer:
@@ -190,6 +191,12 @@ async def get_artist_followers(request: Request,id: str,page: int,category: str=
 
 @router.get('/following',response_description='Get artist following', response_model=List[ShowArtist])
 async def get_artist_following(request: Request,id: str):
+    p=[]
+    user_id=''
+    user_type=''
+    if(request.headers.__contains__('user_id')):
+        user_id=request.headers['user_id']
+        user_type=request.headers['type']
     followings=[]
     if id is None: 
         raise HTTPException(status_code=404, detail=f"Id is missing")
@@ -203,24 +210,44 @@ async def get_artist_following(request: Request,id: str):
             if info is not None:
                 info['followers_no']=len(info['followers'])
                 info['following_no']=len(info['following'])
-                info["follows"]=False
+                if user_id=='':
+                    info["follows"]=False
+                else:
+                    if user_type=='artist':
+                        artist_info= await request.app.mongodb['Artist'].find_one({'artist_id': user_id})
+                        info["follows"]=False
+                        for a in info['followers']: 
+                            if artist_info['_id'] == a['id']:
+                                info["follows"]=True
+                                break
+                            else:
+                                info['follows']=False 
+                    else:
+                        info["follows"]=False
+                        for a in info['followers']: 
+                            if user_id == a['id']:
+                                info["follows"]=True
+                                break
+                            else:
+                                info['follows']=False 
+                # p.append(artist)
+                
                 followings.append(info)
-                #followings.append({'_id': following,'name': info['name'],'images': info['images'],'location': info['location'],'description': info['description'],'skills': info['images']})
+
     
     return followings
 
 
-@router.put('/images/{id}',response_description='Update Product image')
-async def add_artist_images(request: Request, id: str, files: List[UploadFile]):
+@router.put('/images/',response_description='Update Product image')
+async def add_artist_images(request: Request, files: List[UploadFile]):
+    names=[]
     if files is not None: 
         for file in files:
                 image_name= uuid.uuid4()
                 with open(f"media/artist/{image_name}.png", "wb") as buffer:
                     shutil.copyfileobj(file.file, buffer)
-                update_result=await request.app.mongodb['Artist'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
-                if update_result.matched_count==0: 
-                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'artist with id {id} not found')
-        return {"Successfully added new images"}
+                names.append(f"{image_name}.png")
+        return {"success":True, "images":names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 
 @router.put('/follow',response_description="Follow Artist")

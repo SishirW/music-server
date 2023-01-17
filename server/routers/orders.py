@@ -72,8 +72,11 @@ async def get_order_history(request: Request,current_user: ShowUser = Depends(ge
 
 @router.get('/processing')
 async def get_processing_orders(request: Request,current_user: ShowUser = Depends(validate_admin)):
-    order= await request.app.mongodb['Orders'].find({'status':'processing'}).sort('date_time', 1).to_list(1000)
-    return order
+    orders= await request.app.mongodb['Orders'].find({'status':'processing'}).sort('date_time', 1).to_list(1000000)
+    for order in orders:
+        user= await request.app.mongodb['Users'].find_one({"_id":order['user_id']})
+        order['user_name']=user['full_name']
+    return orders
 
 @router.get('/processing_detail')
 async def get_processing_orders_detail(request: Request,id: str,current_user: ShowUser = Depends(validate_admin)):
