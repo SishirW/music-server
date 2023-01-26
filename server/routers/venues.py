@@ -413,33 +413,7 @@ async def complete_booked_package(request: Request, pid:str ,bid:str,current_use
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
     return {'success':True}
-# @router.put('/packages')
-# async def add_packages(request: Request,)
-# @router.put('/', response_description='Update Venue', response_model=ShowVenue)
-# async def edit_product(id: str, request: Request,product: EditProduct=Depends()):
-#     print('-----------------------------------------',product)
-#     product= {k: v for k, v in product.dict().items() if v is not None}
-    
-    
-#     if len(product) >= 1:
-        
-#         update_result = await request.app.mongodb['Products'].update_one(
-#             {"_id": id}, {"$set": product}
-#         )
-        
 
-#         if update_result.modified_count == 1:
-#             if (
-#                 updated_product := await request.app.mongodb['Products'].find_one({"_id": id})
-#             ) is not None:
-#                 return updated_product
-
-#     if (
-#         existing_product := await request.app.mongodb['Products'].find_one({"_id": id})
-#     ) is not None:
-#         return existing_product
-
-#     raise HTTPException(status_code=404, detail=f"Product with id {id} not found")
 @router.get('/category/',response_description='Get all venues categories', response_model=List[ShowVenueCategory])
 async def get_venue_categories(request: Request):
     categories=await request.app.mongodb['VenueCategory'].find().to_list(10000)

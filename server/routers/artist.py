@@ -1,42 +1,42 @@
 from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status
-from ..schemas import CreateArtist, ShowUserWithId, ShowArtist, CreateArtistCategory,ShowArtistCategory
+from ..schemas import CreateArtist, ShowUserWithId, ShowArtist, CreateArtistCategory,ShowArtistCategory,EditArtist,ShowArtistEdited,ArtistSchedule
 import uuid
 from typing import List
-from .user import get_current_user, validate_artist,validate_admin
+from .user import get_current_user, validate_artist,validate_admin,check_is_artist
 import shutil
 from fastapi.encoders import jsonable_encoder
+import os
+
+
 router= APIRouter(prefix= "/artist",tags=["Artist"])
-from jose import JWTError, jwt
 
 @router.post('/',response_description="Add new artist")
 async def create_artist(request: Request,artist: CreateArtist,current_user: ShowUserWithId = Depends(get_current_user)):
-    print(current_user)
+    aid=uuid.uuid4()
+    artist2=artist
     artist.id= uuid.uuid4()
+    artist2.id=artist.id
     artist= jsonable_encoder(artist)
     # artist_check=await request.app.mongodb['Artist'].find_one({'artist_id':current_user['_id']})
     # if artist_check is not None:
     #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User already has artist")
-    # artist_check= await request.app.mongodb['Artist'].find_one({"artist_id":current_user['_id']})
-    # print(artist_check)
-    # if artist_check is not None:
-    #     raise  HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Forbidden",
-    #     )
+    
+    user=await request.app.mongodb['Users'].find_one({'_id':current_user['_id']})
+    user_following=user['following']
+    #print(user_following)
+    for following in user_following:
+        r=await request.app.mongodb['Artist'].update_one({'_id': following,'followers.id':{'$eq':current_user['_id']}},{'$set':{'followers.$[elem]': {'id':str(artist2.id),'type':'artist'}}},upsert=False, array_filters=[{"elem": {'id':current_user['_id'],'type':'user'}},])
     await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$set':{'type': 'artist'}})
     new_artist= await request.app.mongodb['Artist'].insert_one(artist)
     #await request.app.mongodb['artists'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['Artist'].update_one({'_id': new_artist.inserted_id}, {'$set':{'artist_id':current_user['_id'],'rating':[],'followers_count':0}})
-    # for file in files:
-    #     image_name= uuid4()
-    #     with open(f"media/artists/{image_name}.png", "wb") as buffer:
-    #         shutil.copyfileobj(file.file, buffer)
-        
-    #     await request.app.mongodb['artists'].update_one({'_id': new_artist.inserted_id}, {'$push':{'images': f'{image_name}.png'}})
+    await request.app.mongodb['Artist'].update_one({'_id': new_artist.inserted_id}, {'$set':{'artist_id':current_user['_id'],'rating':[],'followers_count':0,'following':user_following}})
+    
+    
     return {"success": True, "id":new_artist.inserted_id}
 
 @router.get('/',response_description='Get all artist')
-async def get_artist(request: Request,page: int=1,category: str=None,search:str=None,admin: bool=False):
+async def get_artist(request: Request,page: int=1,category: str=None,search:str=None,admin: bool=False,current_user: ShowUserWithId = Depends(check_is_artist)):
+    print(current_user)
     if page==0:
         page=1
     p=[]
@@ -46,9 +46,17 @@ async def get_artist(request: Request,page: int=1,category: str=None,search:str=
     if page is None: 
         page=1
     artists_per_page=11
-    if(request.headers.__contains__('user_id')):
-        user_id=request.headers['user_id']
-        user_type=request.headers['type']
+    # if(request.headers.__contains__('user_id')):
+    #     user_id=request.headers['user_id']
+    #     user_type=request.headers['type']
+    if current_user['type']!='not_logged_in':
+        print(current_user['type'])
+        if current_user['type']=='artist':
+           user_id=current_user['id']
+           user_type='artist'
+        else:
+          user_id=current_user['id']
+          user_type='user'   
 
     if search !=None:
         artists=request.app.mongodb['Artist'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*artists_per_page).limit(artists_per_page)
@@ -238,7 +246,49 @@ async def get_artist_following(request: Request,id: str):
     return followings
 
 
-@router.put('/images/',response_description='Update Product image')
+@router.get('/schedule',response_description='Get artist schedule')
+async def get_schedule(request: Request,current_user: ShowUserWithId = Depends(validate_artist)):
+    artist=await request.app.mongodb['Artist'].find_one({"artist_id":current_user['_id']})
+    if artist is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found")
+    return artist['todays_schedule']
+
+@router.put('/delete-schedule',response_description='Delete Schedule')
+async def delete_package(request: Request, aid: str,sid: str,current_user: ShowUserWithId = Depends(validate_artist)):
+    r=await request.app.mongodb['Artist'].update_one({'_id': aid}, {'$pull':{'todays_schedule':{'_id':sid}}})
+    print (r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return {'success':True}
+
+@router.put('/', response_description='Update Product', response_model=ShowArtistEdited)
+async def edit_artist(request: Request,artist: EditArtist,current_user: ShowUserWithId = Depends(validate_artist)):
+    #print('-----------------------------------------',product)
+    artist= {k: v for k, v in artist.dict().items() if v is not None}
+    print(artist)
+    
+    
+    if len(artist) >= 1:
+        
+        update_result = await request.app.mongodb['Artist'].update_one(
+            {"artist_id": current_user['_id']}, {"$set": artist}
+        )
+        
+
+        if update_result.modified_count == 1:
+            if (
+                updated_artist := await request.app.mongodb['Artist'].find_one({"artist_id": current_user['_id']})
+            ) is not None:
+                return updated_artist
+
+    if (
+        existing_artist := await request.app.mongodb['Artist'].find_one({"artist_id": current_user['_id']})
+    ) is not None:
+        return existing_artist
+
+    raise HTTPException(status_code=404, detail=f"artist with id {id} not found")
+
+@router.put('/images/',response_description='Update artist image')
 async def add_artist_images(request: Request, files: List[UploadFile]):
     names=[]
     if files is not None: 
@@ -301,7 +351,16 @@ async def feature_artist(request: Request,id: str,feature:bool,current_user: Sho
         raise HTTPException(status_code=status.HTTP_304_NOT_MODIFIED, detail="Cannot change featured")
     return {'success':True}
 
-
+@router.put('/update-schedule',response_description='Update Artist Schedule')
+async def update_schedule(request: Request, schedule: ArtistSchedule,current_user: ShowUserWithId = Depends(validate_artist)):
+    schedule.id=uuid.uuid4()
+    schedule=jsonable_encoder(schedule)
+    #schedule["_id"]=uuid4()
+    r=await request.app.mongodb['Artist'].update_one({'artist_id': current_user["_id"]}, {'$push':{'todays_schedule': schedule}})
+    print (r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found")
+    return {'success':True}
 
 @router.get('/category/',response_description='Get all Artist categories', response_model=List[ShowArtistCategory])
 async def get_artist_categories(request: Request):
@@ -338,3 +397,21 @@ async def delete_artist(id: str, request: Request,current_user: ShowUserWithId =
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Artist with id {id} not found")
 
+
+
+@router.delete('/images/')
+async def delete_image(id: str, request: Request,images: List[str],current_user: ShowUserWithId = Depends(validate_artist)): 
+    empty=[]
+    i=1
+    for image in images:
+        print(i)
+        update_result=await request.app.mongodb['Artist'].update_one({'_id': id}, {'$pull':{'images': image}})
+        if os.path.exists(f"media/artist/{image}"):
+            os.remove(f"media/artist/{image}")
+        i=i+1
+        if update_result.modified_count==0: 
+            empty.append(image)
+    if len(empty)==0: 
+        return {"detail":"Successfully deleted image", "not_found":[]}
+    else:
+        return {"detail":"Some images were missing", "not_found":empty}

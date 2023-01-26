@@ -3,8 +3,8 @@ from pydoc import describe
 from unicodedata import category
 import uuid
 from bson import ObjectId, _get_float
-from pydantic import BaseModel, Field
-from typing import List, Optional,  Union
+from pydantic import BaseModel, Field,EmailStr
+from typing import List, Optional,  Union,Dict
 import datetime
 
 # Product schemas
@@ -109,6 +109,15 @@ class ShowUser(ShowUserType):
     full_name: str
     username: str
     email: str
+
+class ShowUserWithDetails(ShowUserType):
+    full_name: str
+    username: str
+    email: str
+    orders: List 
+    details: Dict
+
+ 
 class ShowUserDetails(ShowUser):
     orders: List 
 class EditUserAdditionalDetails(BaseModel):
@@ -144,7 +153,7 @@ class CreateUser(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     full_name: str= Field(...)
     username: str= Field(...)
-    email: str= Field(...)
+    email: EmailStr= Field(...)
     password: str= Field(...)
     verified: bool= True
     type: str= "user"
@@ -276,6 +285,8 @@ class ShowVenueCategory(BaseModel):
 class Followers(BaseModel):
     id: str= Field(...)
     type: str=Field(...)
+
+
 class CreateArtist(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
@@ -288,6 +299,10 @@ class CreateArtist(BaseModel):
     skills: List
     looking_for: Optional[List]=[]
     featured: Optional[bool]=False
+    todays_schedule: Optional[List[Schedule]]=[]
+    video: Optional[str]=''
+    social: VenueSocialMedia
+    
 class ShowArtist(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
@@ -301,6 +316,33 @@ class ShowArtist(BaseModel):
     followers_no: int
     featured: bool
     category: str
+
+
+class ArtistSchedule(BaseModel):
+    id: str= Field(alias='_id')
+    venue: str= Field(...)
+    start_time: str=Field(...)
+    end_time: Optional[str]=''
+
+class ShowArtistEdited(BaseModel):
+    id :str=Field(alias='_id')
+    name: str
+    location: str
+    description: str
+    images: Optional[List]=[]
+    skills: List
+    looking_for: Optional[List]=[]
+
+class EditArtist(BaseModel):
+    name: Optional[str]
+    location: Optional[str]
+    description: Optional[str]
+    images: Optional[List]
+    skills: Optional[List]
+    looking_for: Optional[List]
+    category: Optional[str]
+    video: Optional[str]
+    social: Optional[Dict]
 
 class CreateArtistCategory(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
@@ -336,7 +378,8 @@ class CreateUsedProduct(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
     price: float= Field(...)
-    seller: str= Field(...)
+    seller_name: str= Field(...)
+    seller_phone: int= Field(...)
     description: str= Field(...)
     seller_id: Optional[str]
     category: str= Field(...)
@@ -360,13 +403,54 @@ class ShowUsedProduct(BaseModel):
     id: str= Field(alias='_id')
     name: str
     price: float
-    seller: str
+    #seller: str
     description: str
     images: List
     category: str
+
+class ShowUsedProductAdmin(BaseModel):
+    id: str= Field(alias='_id')
+    name: str
+    price: float
+    #seller: str
+    description: str
+    images: List
+    category: str
+    seller_name: str
+    seller_phone: int
+    seller_email:str
+    requests_to_buy: List
+
+class GetUsedProduct(BaseModel):
+    has_next: bool
+    products: List[ShowUsedProduct]
+class GetUsedProductAdmin(BaseModel):
+    has_next: bool
+    products: List[ShowUsedProductAdmin]
 
 class EditUsedProduct(BaseModel):
     name: Optional[str]
     price: Optional[float]
     seller: Optional[str]
     description: Optional[str]
+
+class RequestToBuy(BaseModel):
+    name: str= Field(...)
+    phone_no: int= Field(...)
+    location: str= Field(...)
+
+
+# Repair
+
+class RepairForm(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+
+    instrument: str= Field(...)
+    name: str=Field(...)
+    description: str=Field(...)
+    email: str= Field(...)
+    phone: int= Field(...)
+    location: str= Field(...)
+    date_time: Optional[datetime.datetime]
+    images: List[str]=Field(...)
+

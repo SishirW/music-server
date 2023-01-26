@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional,Set, Union 
 from .user import get_current_user, validate_seller,validate_admin
-from ..schemas import CreateUsedProduct,ShowUserWithId,ShowUsedProduct,EditUsedProduct,ProductQuestion
+from ..schemas import CreateUsedProduct,ShowUserWithId,ShowUsedProduct,EditUsedProduct,ProductQuestion, RequestToBuy,GetUsedProduct,GetUsedProductAdmin
 import shutil
 from uuid import uuid1, uuid4
 from pydantic import parse_obj_as,Field
@@ -21,11 +21,11 @@ async def create_product(request: Request,product: CreateUsedProduct,current_use
     
     new_product= await request.app.mongodb['UsedProducts'].insert_one(product)
     #await request.app.mongodb['Products'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['UsedProducts'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [],'seller_id':current_user['_id'], 'questions':[]}})
+    await request.app.mongodb['UsedProducts'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [],'seller_id':current_user['_id'], 'seller_email': current_user['email'],'questions':[],'requests_to_buy':[]}})
     return {"success": True, "id":new_product.inserted_id}
 
 
-@router.get('/',response_description='Get all used products')
+@router.get('/',response_description='Get all used products',response_model=GetUsedProduct)
 async def get_products(request: Request,page: int=1,sort:int=0,category: str=None,search:str=None):
     if page==0:
         page=1
@@ -114,7 +114,97 @@ async def get_products(request: Request,page: int=1,sort:int=0,category: str=Non
         # products=await request.app.mongodb['Products'].find({"category":category}).to_list(1000)
         # if(len(products)==0):
         #     raise HTTPException(status_code=404, detail=f"Products with category {category} not found")
+
+@router.get('/admin',response_description='Get all used products',response_model=GetUsedProductAdmin)
+async def get_products(request: Request,page: int=1,sort:int=0,category: str=None,search:str=None,current_user: ShowUserWithId = Depends(validate_admin)):
+    if page==0:
+        page=1
+    p=[]
+    test={"has_next": False}
+    if page is None: 
+        page=0
+    products_per_page=10
+    print(category)
+    if search !=None:
+        if sort==0:
+            products=request.app.mongodb['UsedProducts'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['UsedProducts'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*products_per_page).limit(products_per_page)
+        elif sort==1:
+            products=request.app.mongodb['UsedProducts'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['UsedProducts'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+        else:
+            products=request.app.mongodb['UsedProducts'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['UsedProducts'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
+        count=0
         
+        async for product in product2:
+            count+=1
+        
+        if count==0:
+            test['has_next']=False
+        else:
+            test['has_next']=True
+        async for product in products:
+            p.append(product)
+        test['products']=p
+        return test
+    if category !=None:
+        if sort==0:
+            products=request.app.mongodb['UsedProducts'].find({"category":category}).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['UsedProducts'].find({"category":category}).skip((page)*products_per_page).limit(products_per_page)
+        elif sort==1:
+             products=request.app.mongodb['UsedProducts'].find({"category":category}).sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
+             product2=request.app.mongodb['UsedProducts'].find({"category":category}).sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+        else:
+            products=request.app.mongodb['UsedProducts'].find({"category":category}).sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['UsedProducts'].find({"category":category}).sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
+        count=0
+        count2=0
+        async for product in product2:
+            count+=1
+        
+        if count==0:
+            test['has_next']=False
+        else:
+            test['has_next']=True
+        
+        
+        async for product in products:
+            p.append(product)
+        test['products']=p
+    
+        return test
+    products={}
+    product2={}
+    if sort==0:
+        products=request.app.mongodb['UsedProducts'].find().skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['UsedProducts'].find().skip((page)*products_per_page).limit(products_per_page)
+    elif sort==1:
+        products=request.app.mongodb['UsedProducts'].find().sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['UsedProducts'].find().sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+    else:
+        products=request.app.mongodb['UsedProducts'].find().sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['UsedProducts'].find().sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
+    count=0
+    
+    async for product in product2:
+        count+=1
+    
+    if count==0:
+        test['has_next']=False
+    else:
+        test['has_next']=True
+    
+    
+    async for product in products:
+        p.append(product)
+    test['products']=p
+    return test
+        #print(products)
+        # products=await request.app.mongodb['Products'].find({"category":category}).to_list(1000)
+        # if(len(products)==0):
+        #     raise HTTPException(status_code=404, detail=f"Products with category {category} not found")
+
 @router.get('/questions',response_description='View questions of used Product')
 async def get_product_questions(request: Request, id:str):
     product=await request.app.mongodb['UsedProducts'].find_one({"_id": id})
@@ -260,3 +350,19 @@ async def question_product(request: Request, questions: ProductQuestion,current_
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     return {'success':True}
+
+@router.put('/request-to-buy',response_description='Request to buy Used Product')
+async def request_to_buy(request: Request, id: str,request_to_buy: RequestToBuy,current_user: ShowUserWithId = Depends(get_current_user)):
+    request_to_buy= jsonable_encoder(request_to_buy)
+    product_check= await request.app.mongodb['UsedProducts'].find_one({"_id":id})
+    if product_check is None:
+          raise HTTPException(status_code=404, detail=f"Product with id {id} not found")
+    request_to_buy['user_id']=current_user['_id']
+    request_to_buy['email']=current_user['email']
+    r=await request.app.mongodb['UsedProducts'].update_one({'_id': id}, {'$push':{'requests_to_buy': request_to_buy}})
+    #print(r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    return {'success':True}
+
+

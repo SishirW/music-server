@@ -20,7 +20,6 @@ async def create_product(request: Request,product: CreateProduct,current_user: S
     print(current_user)
     product.id= uuid.uuid4()
     product= jsonable_encoder(product)
-    
     new_product= await request.app.mongodb['Products'].insert_one(product)
     #await request.app.mongodb['Products'].update(  {  $set : {"address":1} }  )
     await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [],'seller_id':current_user['_id'], 'avg_rating': 0.0,'no_of_rating':0 ,'rating':[],'questions':[]}})
@@ -42,7 +41,7 @@ async def get_products(request: Request,page: int=1,sort:int=0,category: str=Non
     test={"has_next": False}
     if page is None: 
         page=0
-    products_per_page=11
+    products_per_page=6
     if search !=None:
         if sort==0:
             products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*products_per_page).limit(products_per_page)
@@ -284,11 +283,14 @@ async def question_product(request: Request, questions: ProductQuestion,current_
 
 @router.delete('/images/{id}')
 async def delete_image(id: str, request: Request,images: List[str],current_user: ShowUser = Depends(get_current_user)): 
-    
     empty=[]
+    i=1
     for image in images:
+        print(i)
         update_result=await request.app.mongodb['Products'].update_one({'_id': id}, {'$pull':{'images': image}})
-        os.remove(f"media/products/{image}")
+        if os.path.exists(f"media/products/{image}"):
+            os.remove(f"media/products/{image}")
+        i=i+1
         if update_result.modified_count==0: 
             empty.append(image)
     if len(empty)==0: 

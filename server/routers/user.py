@@ -5,7 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from typing import Union,List
 from datetime import datetime,timedelta
 from jose import JWTError, jwt
-from ..schemas import CreateUser,ShowUser, ShowUserType, ShowUserDetailsAdmin,ShowUserWithId,TokenData, Token,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserDetails
+from ..schemas import CreateUser,ShowUser, ShowUserType, ShowUserDetailsAdmin,ShowUserWithId,TokenData, Token,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserDetails,ShowUserWithDetails
 from ..password_methods import get_password_hash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
@@ -13,7 +13,7 @@ router= APIRouter(tags=['User'], prefix='/user')
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
-
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth", auto_error=False)
 SECRET_KEY = "e59412a8495ec43e79483d7010399e5647cb9199ccd4f2f3d0de8b05dd773f92"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 3000
@@ -87,7 +87,7 @@ async def validate(request: Request,token: str= Header(default=None)):
 
 
 async def get_current_user(request: Request,token: str = Depends(oauth2_scheme)):
-    print(token)
+    #print(token)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -105,6 +105,28 @@ async def get_current_user(request: Request,token: str = Depends(oauth2_scheme))
     if user is None:
         raise credentials_exception
     return user
+
+async def check_is_artist(request: Request,token: str = Depends(optional_oauth2_scheme)):
+    if token is None:
+        return {'type':'not_logged_in'}
+    #print('---------------------- ',token)
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return {'type':'not_logged_in'}
+        token_data = TokenData(username=username)
+    except JWTError:
+        return {'type':'not_logged_in'}
+    user =await request.app.mongodb['Users'].find_one({'username':username})
+    if user is None:
+        return {'type':'not_logged_in'}
+    return {'type':user['type'],'id':user['_id']}
 
 async def get_details(request: Request,token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -290,11 +312,19 @@ async def get_users(request: Request,page: int=1,search:str=None,current_user: S
 
 
 
-@router.get('/get_details', response_model=ShowUserDetails)
+@router.get('/get_details', response_model=ShowUserWithDetails)
 async def get_user_details(request: Request,current_user: ShowUser = Depends(get_current_user)):
     user=await request.app.mongodb['Users'].find_one({"_id":current_user["_id"]})
     if user is None: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    if user['type']=='artist':
+        artist_check=await request.app.mongodb['Artist'].find_one({'artist_id':current_user['_id']})
+        user['details']=artist_check
+    elif user['type']=='venue':
+        venue_check=await request.app.mongodb['Venues'].find_one({'owner_id':current_user['_id']})
+        user['details']=venue_check
+    else:
+       user['details']={} 
     return user
 
 @router.get('/get_additional_details', response_model=EditUserAdditionalDetails)

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from server.routers import musical_products,user,auth,venues,cart,orders,artist,packages,grow,used_products
+from server.routers import musical_products,user,auth,venues,cart,orders,artist,packages,grow,used_products,repair
 from motor.motor_asyncio import AsyncIOMotorClient
 from . import models
 #from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +53,7 @@ app.include_router(venues.router)
 app.include_router(orders.router)
 app.include_router(artist.router)
 app.include_router(grow.router)
+app.include_router(repair.router)
 
 
 

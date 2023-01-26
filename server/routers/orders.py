@@ -71,15 +71,76 @@ async def get_order_history(request: Request,current_user: ShowUser = Depends(ge
 
 
 @router.get('/processing')
-async def get_processing_orders(request: Request,current_user: ShowUser = Depends(validate_admin)):
-    orders= await request.app.mongodb['Orders'].find({'status':'processing'}).sort('date_time', 1).to_list(1000000)
-    for order in orders:
+async def get_processing_orders(request: Request,page: int=1,current_user: ShowUser = Depends(validate_admin)):
+    orders_per_page=3
+    orders_list=[]
+    orders_detail={}
+    orders= request.app.mongodb['Orders'].find({'status':'processing'}).sort('date_time',-1).skip((page-1)*orders_per_page).limit(orders_per_page)
+    orders2= request.app.mongodb['Orders'].find({'status':'processing'}).sort('date_time',-1).skip((page)*orders_per_page).limit(orders_per_page)
+    async for order in orders:
         user= await request.app.mongodb['Users'].find_one({"_id":order['user_id']})
         order['user_name']=user['full_name']
-    return orders
+        orders_list.append(order)
+    
+    count=0
+    async for order in orders2:
+        count+=1
+    if count==0:
+        orders_detail['has_next']=False
+    else:
+        orders_detail['has_next']=True
+    orders_detail['orders']=orders_list
+    return orders_detail
+
+@router.get('/cancelled')
+async def get_cancelled_orders(request: Request,page: int=1,current_user: ShowUser = Depends(validate_admin)):
+    orders_per_page=3
+    orders_list=[]
+    orders_detail={}
+    orders= request.app.mongodb['Orders'].find({'status':'cancelled'}).skip((page-1)*orders_per_page).limit(orders_per_page)
+    orders2= request.app.mongodb['Orders'].find({'status':'cancelled'}).skip((page)*orders_per_page).limit(orders_per_page)
+    print(orders)
+    async for order in orders:
+        user= await request.app.mongodb['Users'].find_one({"_id":order['user_id']})
+        order['user_name']=user['full_name']
+        orders_list.append(order)
+    
+    count=0
+    async for order in orders2:
+        count+=1
+    if count==0:
+        orders_detail['has_next']=False
+    else:
+        orders_detail['has_next']=True
+    orders_detail['orders']=orders_list
+    return orders_detail
+
+@router.get('/complete')
+async def get_completed_orders(request: Request,page: int=1,current_user: ShowUser = Depends(validate_admin)):
+    orders_per_page=3
+    orders_list=[]
+    orders_detail={}
+    orders= request.app.mongodb['Orders'].find({'status':'complete'}).skip((page-1)*orders_per_page).limit(orders_per_page)
+    orders2= request.app.mongodb['Orders'].find({'status':'complete'}).skip((page)*orders_per_page).limit(orders_per_page)
+    print(orders)
+    async for order in orders:
+        user= await request.app.mongodb['Users'].find_one({"_id":order['user_id']})
+        order['user_name']=user['full_name']
+        orders_list.append(order)
+    
+    count=0
+    async for order in orders2:
+        count+=1
+    if count==0:
+        orders_detail['has_next']=False
+    else:
+        orders_detail['has_next']=True
+    orders_detail['orders']=orders_list
+    return orders_detail
+     
 
 @router.get('/processing_detail')
-async def get_processing_orders_detail(request: Request,id: str,current_user: ShowUser = Depends(validate_admin)):
+async def get_orders_detail(request: Request,id: str,current_user: ShowUser = Depends(validate_admin)):
     order= await request.app.mongodb['Orders'].find_one({"_id":id})
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order with id {id} not found")
