@@ -8,3 +8,5 @@ passlib[bcrypt]
 python-multipart 
 pymongo[srv]
 pydantic[email]
+requests
+pytz

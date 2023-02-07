@@ -6,6 +6,10 @@ from bson import ObjectId, _get_float
 from pydantic import BaseModel, Field,EmailStr
 from typing import List, Optional,  Union,Dict
 import datetime
+import pytz
+
+
+tz = pytz.timezone('Asia/Kathmandu')
 
 # Product schemas
 
@@ -26,10 +30,9 @@ class CreateProduct(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
     price: float= Field(...)
-    seller: str= Field(...)
     description: str= Field(...)
-    seller_id: Optional[str]
     category: str= Field(...)
+    points: int=Field(...)
     #avg_rating: Optional[float]=0.0
     
 
@@ -51,7 +54,6 @@ class ShowProduct(BaseModel):
     id: str= Field(alias='_id')
     name: str
     price: float
-    seller: str
     description: str
     images: List
     category: str
@@ -71,8 +73,8 @@ class OptionalProduct(BaseModel):
 class EditProduct(BaseModel):
     name: Optional[str]
     price: Optional[float]
-    seller: Optional[str]
     description: Optional[str]
+    points: Optional[str]
     #new_image: Optional[str]
     #images_to_delete:Optional[List[str]]
 
@@ -87,6 +89,7 @@ class OrderProduct(BaseModel):
     user_id: str
     type: str
     date_time: datetime.datetime = datetime.datetime.now()
+    khalti_details: Optional[Dict]
 
 class GetProductRating(BaseModel):
     rating: str
@@ -156,12 +159,14 @@ class CreateUser(BaseModel):
     email: EmailStr= Field(...)
     password: str= Field(...)
     verified: bool= True
-    type: str= "user"
+    #type: Optional[str]= "user"
     cart: List=[]
     location: Optional[str]=''
     phone_no: Optional[str]=''
     orders: Optional[List]=[]
     following: Optional[List]=[]
+    #created_at: datetime.datetime = datetime.datetime.now()
+    
 
 
 class UserDetails(BaseModel):
@@ -202,10 +207,21 @@ class Package(BaseModel):
     id: str= Field(alias='_id')
     #venue_id: str= Field(...)
     name: str=Field(...)
-    price: float=Field(...)
+    price: int=Field(...)
     time: str=Field(...)
+    date: str= Field(...)
     valid: Optional[bool]=True
     bookings: Optional[List]=[]
+    description: str= Field(...)
+    points: int=0
+
+# class PaymentInfo(BaseModel):
+#     token: str= Field(...)
+#     idx: str= Field(...)
+#     phone: str= Field(...)
+#     amount_paid: str= Field(...)
+#     amount_paid_in_rs: str= Field(...)
+
     
 class EditPackage(BaseModel):
     name: Optional[str]
@@ -240,11 +256,11 @@ class EditVenue(BaseModel):
     name: Optional[str]
     location: Optional[str]
     description: Optional[str]
-    todays_schedule: Optional[List]
-    menu: Optional[str]
+    images: Optional[List]
+    menu: Optional[List]
+    category: Optional[str]
     video: Optional[str]
-    social: Optional[str]
-    packages: Optional[List]
+    social: Optional[Dict]
 
 class Schedule(BaseModel):
     id: str= Field(alias='_id')
@@ -371,18 +387,24 @@ class GrowForm(BaseModel):
     description: str= Field(...)
     previous_course: str= Field(...)
 
+class GrowVideoForm(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    video_url: str= Field(...)
+
 
 
 # Used product
 class CreateUsedProduct(BaseModel):
     id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
     name: str= Field(...)
-    price: float= Field(...)
+    price: int= Field(...)
     seller_name: str= Field(...)
     seller_phone: int= Field(...)
+    location: str= Field(...)
     description: str= Field(...)
     seller_id: Optional[str]
     category: str= Field(...)
+    images: List[str]= Field(...)
     
 
     class Config:
@@ -411,9 +433,10 @@ class ShowUsedProduct(BaseModel):
 class ShowUsedProductAdmin(BaseModel):
     id: str= Field(alias='_id')
     name: str
-    price: float
+    price: int
     #seller: str
     description: str
+    location: str
     images: List
     category: str
     seller_name: str
@@ -430,10 +453,13 @@ class GetUsedProductAdmin(BaseModel):
 
 class EditUsedProduct(BaseModel):
     name: Optional[str]
-    price: Optional[float]
-    seller: Optional[str]
+    price: Optional[int]
+    seller_name: Optional[str]
+    seller_phone:Optional[ int]
+    location: Optional[str]
     description: Optional[str]
-
+    category: Optional[str]
+    images: Optional[List[str]]
 class RequestToBuy(BaseModel):
     name: str= Field(...)
     phone_no: int= Field(...)
@@ -453,4 +479,14 @@ class RepairForm(BaseModel):
     location: str= Field(...)
     date_time: Optional[datetime.datetime]
     images: List[str]=Field(...)
+
+
+# Advertisment
+
+class AddAdvertisment(BaseModel):
+    id :Optional[str]= Field(default_factory=uuid.uuid4, alias='_id')
+    name:str=Field(...)
+    image: str=Field(...)
+    url: str=Field(...)
+    starting_image: Optional[str]=''
 

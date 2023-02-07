@@ -5,6 +5,7 @@ from fastapi import APIRouter,Request,Depends,HTTPException,status
 from fastapi.encoders import jsonable_encoder
 from ..schemas import AddToCart, OrderProduct, ShowCart, ShowProduct, ShowProductCart, ShowUser
 from .user import get_current_user,validate_admin
+import requests
 
 router= APIRouter(prefix= "/order",tags=["Product orders"])
 
@@ -27,6 +28,41 @@ async def place_order(request: Request,orders: OrderProduct,current_user: ShowUs
     for product in orders["product_ids"]:
         await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$pull':{'cart': {"product_id":{"$eq":product["id"]}}}})
     return {'success':True}
+
+@router.post('/khalti')
+async def place_order_khalti(request: Request,orders: OrderProduct,current_user: ShowUser = Depends(get_current_user)):
+    user= await request.app.mongodb['Users'].find_one({"_id":current_user['_id']})
+    orders.id= uuid.uuid4()
+    orders.user_id= current_user['_id']
+    orders= jsonable_encoder(orders)
+    print(orders);
+    payload = {
+        'token': orders['khalti_details']['token'],
+        'amount': orders['khalti_details']['price']
+    }
+    headers = {
+        'Authorization': 'Key test_secret_key_a290c9bfc87a4c3f9016af3055f3e882'
+    }
+    url = "https://khalti.com/api/v2/payment/verify/"
+    response = requests.request("POST", url, headers=headers, data=payload)
+    if(response.status_code==200):
+
+
+        for order in orders['product_ids']: 
+            p= await request.app.mongodb['Products'].find_one({"_id":order['id']})
+            if p is None:
+                raise HTTPException(status_code=404, detail="Product with id {} not found".format(order['id']))
+        
+        await request.app.mongodb['Orders'].insert_one(orders)
+        for order in orders['product_ids']:
+            print(order) 
+            await request.app.mongodb['Products'].update_one({'_id': order['id']}, {'$push':{'orders': orders['_id']}})
+        await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$push':{'orders': orders['_id']}})
+        for product in orders["product_ids"]:
+            await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$pull':{'cart': {"product_id":{"$eq":product["id"]}}}})
+        return {'success':True}
+    
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No transaction found")
 
 @router.get('/')
 async def get_current_orders(request: Request,current_user: ShowUser = Depends(get_current_user)):
@@ -79,7 +115,10 @@ async def get_processing_orders(request: Request,page: int=1,current_user: ShowU
     orders2= request.app.mongodb['Orders'].find({'status':'processing'}).sort('date_time',-1).skip((page)*orders_per_page).limit(orders_per_page)
     async for order in orders:
         user= await request.app.mongodb['Users'].find_one({"_id":order['user_id']})
-        order['user_name']=user['full_name']
+        if user is not None:
+            order['user_name']=user['full_name']
+        else:
+             order['user_name']='Deleted User'
         orders_list.append(order)
     
     count=0
@@ -102,7 +141,10 @@ async def get_cancelled_orders(request: Request,page: int=1,current_user: ShowUs
     print(orders)
     async for order in orders:
         user= await request.app.mongodb['Users'].find_one({"_id":order['user_id']})
-        order['user_name']=user['full_name']
+        if user is not None:
+            order['user_name']=user['full_name']
+        else:
+             order['user_name']='Deleted User'
         orders_list.append(order)
     
     count=0
@@ -125,7 +167,10 @@ async def get_completed_orders(request: Request,page: int=1,current_user: ShowUs
     print(orders)
     async for order in orders:
         user= await request.app.mongodb['Users'].find_one({"_id":order['user_id']})
-        order['user_name']=user['full_name']
+        if user is not None:
+            order['user_name']=user['full_name']
+        else:
+             order['user_name']='Deleted User'
         orders_list.append(order)
     
     count=0
@@ -168,6 +213,16 @@ async def get_orders_detail(request: Request,id: str,current_user: ShowUser = De
 async def complete_order(request: Request, id: str,type: int=0,current_user: ShowUser = Depends(validate_admin)):
     if type==0:
         r=await request.app.mongodb['Orders'].update_one({'_id': id},{'$set':{'status': 'complete'}})
+        order= await request.app.mongodb['Orders'].find_one({'_id': id})
+        user= await request.app.mongodb['Users'].find_one({'_id': order['user_id']})
+        if user is not None:
+            user_point= user['points']
+            total_points=0
+            for product in order['product_ids']:
+                temp_product= await request.app.mongodb['Products'].find_one({'_id': product['id']})
+                if temp_product is not None:
+                    total_points+=temp_product['points']*product['quantity']
+            await request.app.mongodb['Users'].update_one({'_id': order['user_id']},{'$set':{'points': user_point+total_points}})  
     else:
         r=await request.app.mongodb['Orders'].update_one({'_id': id},{'$set':{'status': 'cancelled'}})
     print (r.modified_count)

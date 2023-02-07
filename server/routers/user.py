@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 from ..schemas import CreateUser,ShowUser, ShowUserType, ShowUserDetailsAdmin,ShowUserWithId,TokenData, Token,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserDetails,ShowUserWithDetails
 from ..password_methods import get_password_hash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-
+import random
 router= APIRouter(tags=['User'], prefix='/user')
 
 
@@ -18,6 +18,11 @@ SECRET_KEY = "e59412a8495ec43e79483d7010399e5647cb9199ccd4f2f3d0de8b05dd773f92"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 3000
 
+
+def randomDigits(digits):
+    lower = 10**(digits-1)
+    upper = 10**digits - 1
+    return random.randint(lower, upper)
 
 # @router.get('/{id}', response_model=ShowUser)
 # async def get_user(request: Request, id: str):
@@ -36,21 +41,51 @@ async def create_user(request: Request, user: CreateUser):
     username= user.username
     email=user.email
     user= jsonable_encoder(user)
+    created_at= datetime.now()
+   #user.pop('created_at')
     username_check= await request.app.mongodb['Users'].find_one({"username":username})
     print(username_check)
     if username_check is not None:
         raise  HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Username already taken",
+            detail=["username","Username already taken"],
         )
     email_check= await request.app.mongodb['Users'].find_one({"email":email})
     if email_check is not None:
         raise  HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email already taken",
+            detail=["email","Email already taken"],
         )
     new_user= await request.app.mongodb['Users'].insert_one(user)
-    return {f'Created a user with username {username}'}
+    validation_number= randomDigits(5)
+    await request.app.mongodb['Users'].update_one({'_id': new_user.inserted_id}, {'$set':{'points':0,'bookings':[], 'devices':[],'validation_token':[{'number':validation_number, 'created_at': created_at}]}})
+    return {'_id':new_user.inserted_id}
+
+
+@router.put('/verify')
+async def verify_user(request: Request, id: str,token:int):
+    user= await request.app.mongodb['Users'].find_one({"_id":id})
+    if user== None or user['verified']==True:
+        raise  HTTPException( status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot confirm",)
+    for codes in user['validation_token']:
+        #created_date= datetime.strptime(codes['created_at'], "%Y-%m-%dT%H:%M:%S.%f")
+        difference= datetime.now()- codes['created_at']
+        difference_in_hour= difference.total_seconds() /3600
+        
+        if codes['number']== token:
+            if difference_in_hour<2:
+                r= await request.app.mongodb['Users'].update_one({'_id': id},{'$set':{'verified': True}})  
+                print(r.modified_count)
+                return {'success':True}
+            else:
+                raise  HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="Expired code",)
+            
+    
+    raise  HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized",)
+
+
+
+
 
 
 
@@ -65,25 +100,25 @@ def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-@router.post('/validate', response_model=ShowUserType)
-async def validate(request: Request,token: str= Header(default=None)):
-    credentials_exception = HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
-    user =await request.app.mongodb['Users'].find_one({'username':username})
-    if user is None:
-        raise credentials_exception
-    return user
+# @router.post('/validate', response_model=ShowUserType)
+# async def validate(request: Request,token: str= Header(default=None)):
+#     credentials_exception = HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail="Could not validate credentials",
+#             headers={"WWW-Authenticate": "Bearer"},
+#         )
+#     try:
+#         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+#         username: str = payload.get("sub")
+#         if username is None:
+#             raise credentials_exception
+#         token_data = TokenData(username=username)
+#     except JWTError:
+#         raise credentials_exception
+#     user =await request.app.mongodb['Users'].find_one({'username':username})
+#     if user is None:
+#         raise credentials_exception
+#     return user
 
 
 async def get_current_user(request: Request,token: str = Depends(oauth2_scheme)):
@@ -103,6 +138,8 @@ async def get_current_user(request: Request,token: str = Depends(oauth2_scheme))
         raise credentials_exception
     user =await request.app.mongodb['Users'].find_one({'username':username})
     if user is None:
+        raise credentials_exception
+    if user['verified']==False:
         raise credentials_exception
     return user
 
@@ -359,3 +396,17 @@ async def delete_user(request: Request,id: str,current_user: ShowUser = Depends(
         return {f"Successfully deleted user with id {id}"}
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {id} not found")
+
+@router.get('/get_bookings_detail')
+async def get_bookings_detail(request: Request,current_user: ShowUser = Depends(get_current_user)):
+    user=await request.app.mongodb['Users'].find_one({"_id":current_user["_id"]})
+    if user is None: 
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    return user['bookings']
+
+@router.put('/add-device')
+async def add_device(request: Request, token: str,current_user: ShowUser = Depends(get_current_user)):
+    r= await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$push':{'devices': token}})
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_304_NOT_MODIFIED, detail="Device was not added")
+    return {'success':True}

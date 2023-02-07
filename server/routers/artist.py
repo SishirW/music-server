@@ -335,6 +335,10 @@ async def unfollow_artist(request: Request,id: str,current_user: ShowUserWithId 
         if r.modified_count==0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found")
         await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$pull':{'following': id}})
+    art= await request.app.mongodb['Artist'].find_one({"_id":id})
+    artist_no_of_followers=art['followers_count']
+    
+    r=await request.app.mongodb['Artist'].update_one({'_id': id}, {'$set':{'followers_count': artist_no_of_followers-1}})
     return {"success": True}
 
 

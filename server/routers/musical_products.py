@@ -22,7 +22,7 @@ async def create_product(request: Request,product: CreateProduct,current_user: S
     product= jsonable_encoder(product)
     new_product= await request.app.mongodb['Products'].insert_one(product)
     #await request.app.mongodb['Products'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [],'seller_id':current_user['_id'], 'avg_rating': 0.0,'no_of_rating':0 ,'rating':[],'questions':[]}})
+    await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [], 'avg_rating': 0.0,'no_of_rating':0 ,'rating':[],'questions':[]}})
     # for file in files:
     #     image_name= uuid4()
     #     with open(f"media/products/{image_name}.png", "wb") as buffer:
@@ -49,6 +49,9 @@ async def get_products(request: Request,page: int=1,sort:int=0,category: str=Non
         elif sort==1:
             products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
             product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+        elif sort==2:
+            products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('points', -1).skip((page-1)*products_per_page).limit(products_per_page)
+            product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('points', -1).skip((page)*products_per_page).limit(products_per_page)
         else:
             products=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
             product2=request.app.mongodb['Products'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
@@ -71,6 +74,9 @@ async def get_products(request: Request,page: int=1,sort:int=0,category: str=Non
         elif sort==1:
              products=request.app.mongodb['Products'].find({"category":category}).sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
              product2=request.app.mongodb['Products'].find({"category":category}).sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+        elif sort==2:
+             products=request.app.mongodb['Products'].find({"category":category}).sort('points', -1).skip((page-1)*products_per_page).limit(products_per_page)
+             product2=request.app.mongodb['Products'].find({"category":category}).sort('points', -1).skip((page)*products_per_page).limit(products_per_page)
         else:
             products=request.app.mongodb['Products'].find({"category":category}).sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
             product2=request.app.mongodb['Products'].find({"category":category}).sort('price', -1).skip((page)*products_per_page).limit(products_per_page)
@@ -102,6 +108,9 @@ async def get_products(request: Request,page: int=1,sort:int=0,category: str=Non
     elif sort==1:
         products=request.app.mongodb['Products'].find().sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
         product2=request.app.mongodb['Products'].find().sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
+    elif sort==2:
+        products=request.app.mongodb['Products'].find().sort('points', -1).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['Products'].find().sort('points', -1).skip((page)*products_per_page).limit(products_per_page)
     else:
         products=request.app.mongodb['Products'].find().sort('price', -1).skip((page-1)*products_per_page).limit(products_per_page)
         product2=request.app.mongodb['Products'].find().sort('price', -1).skip((page)*products_per_page).limit(products_per_page)

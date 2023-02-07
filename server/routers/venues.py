@@ -3,11 +3,15 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 
 from server.routers.user import validate_venue
-from ..schemas import CreateVenue, ShowUserWithId, CreateFeatured,ShowVenue, ShowVenueAdmin,Package,Schedule,VenueRating, ShowUser, GetVenueRating,ShowVenueCategory,CreateVenueCategory
-from typing import List
+from ..schemas import CreateVenue, ShowUserWithId, CreateFeatured,ShowVenue, ShowVenueAdmin,Package,EditVenue,Schedule,VenueRating, ShowUser, GetVenueRating,ShowVenueCategory,CreateVenueCategory
+from typing import List, Dict
 from uuid import uuid4
 import shutil
 from .user import get_current_user,validate_admin
+import requests
+import os
+import pytz
+from datetime import datetime
 
 router= APIRouter(prefix= "/venues",tags=["Venues"])
 
@@ -116,7 +120,10 @@ async def get_venues(request: Request,page: int=1,category: str=None,search:str=
     test['venues']=p
     return test
     
-
+@router.get('/request',response_description='Get requested venues')
+async def get_requested_venues(request: Request,current_user: ShowUser = Depends(validate_admin)):
+    venues=await request.app.mongodb['Venues'].find({"validate":False}).to_list(10000000)
+    return venues
 # @router.get('/', response_model=List[ShowVenue])
 # async def get_venues(request: Request):
 #     venues=await request.app.mongodb['Venues'].find().to_list(1000)
@@ -142,18 +149,54 @@ async def get_featured_venue(request: Request):
         
     return venues
 
-@router.get('/my_venue',response_description='Get my venues', response_model=ShowVenueAdmin)
+
+@router.put('/', response_description='Update Venue', response_model=EditVenue)
+async def edit_venue(request: Request,venue: EditVenue,current_user: ShowUserWithId = Depends(validate_venue)):
+    #print('-----------------------------------------',product)
+    venue= {k: v for k, v in venue.dict().items() if v is not None}
+    print(venue)
+    
+    
+    if len(venue) >= 1:
+        
+        update_result = await request.app.mongodb['Venues'].update_one(
+            {"owner_id": current_user['_id']}, {"$set": venue}
+        )
+        
+
+        if update_result.modified_count == 1:
+            if (
+                updated_venue := await request.app.mongodb['Venues'].find_one({"owner_id": current_user['_id']})
+            ) is not None:
+                return updated_venue
+
+    if (
+        existing_venue := await request.app.mongodb['Venues'].find_one({"owner_id": current_user['_id']})
+    ) is not None:
+        return existing_venue
+
+    raise HTTPException(status_code=404, detail=f"Venue with id {id} not found")
+
+@router.get('/my_venue',response_description='Get my venues')
 async def get_venue(request: Request,current_user: ShowUser = Depends(validate_venue)):
     venues=await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
-    print(venues)
-    for data in venues['packages']:
-        user_info=[]
-        for booking in data['bookings']:
-            user=await request.app.mongodb['Users'].find_one({"_id": booking['user_id']})
-            if user is not None:
-                user_info.append({'complete':booking['complete'],'id':booking['user_id'],'name':user['full_name'],'email':user['email'],'phone_no':user['phone_no']})
-        data['bookings']=user_info
+    # print(venues)
+    # for data in venues['packages']:
+    #     user_info=[]
+    #     for booking in data['bookings']:
+    #         user=await request.app.mongodb['Users'].find_one({"_id": booking['user_id']})
+    #         if user is not None:
+    #             user_info.append({'complete':booking['complete'],'id':booking['user_id'],'name':user['full_name'],'email':user['email'],'phone_no':user['phone_no']})
+        # data['bookings']=user_info
     return venues
+
+@router.get('/my_venue_schedule',response_description='Get my Venue schedule')
+async def get_venue_schedule(request: Request,current_user: ShowUser = Depends(validate_venue)):
+    venues=await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
+    if venues is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+    return venues['todays_schedule']
+
 @router.get('/my_venue_packages_valid',response_description='Get my venues packages')
 async def get_venue_packages(request: Request,current_user: ShowUser = Depends(validate_venue)):
     venues=await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
@@ -166,7 +209,7 @@ async def get_venue_packages(request: Request,current_user: ShowUser = Depends(v
             continue
         user_info=[]
         for booking in data['bookings']:
-            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone']})
+            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone'],'amount_paid':booking['payment_details']['amount_paid_in_rs']})
         data['bookings']=user_info
         packages.append(data)
     datas['packages']=packages
@@ -183,7 +226,7 @@ async def get_venue_packages_admin(request: Request,id:str,current_user: ShowUse
             continue
         user_info=[]
         for booking in data['bookings']:
-            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone']})
+            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone'],'amount_paid':booking['payment_details']['amount_paid_in_rs']})
         data['bookings']=user_info
         packages.append(data)
     return packages
@@ -200,7 +243,7 @@ async def get_venue_packages(request: Request,current_user: ShowUser = Depends(v
             continue
         user_info=[]
         for booking in data['bookings']:
-            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone']})
+            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone'],'amount_paid':booking['payment_details']['amount_paid_in_rs']})
         data['bookings']=user_info
         packages.append(data)
     datas['packages']=packages
@@ -218,7 +261,7 @@ async def get_venue_packages(request: Request,id:str,current_user: ShowUser = De
             continue
         user_info=[]
         for booking in data['bookings']:
-            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone']})
+            user_info.append({'complete':booking['complete'],'_id':booking['_id'],'name':booking['name'],'email':booking['email'],'phone':booking['phone'],'amount_paid':booking['payment_details']['amount_paid_in_rs']})
         data['bookings']=user_info
         packages.append(data)
     return packages
@@ -295,7 +338,6 @@ async def delete_featured_venue(id: str, request: Request,current_user: ShowUser
 
 @router.put('/images/',response_description='Update Venue image')
 async def add_venue_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
-    
     names=[]
     if files is not None: 
         for file in files:
@@ -306,18 +348,38 @@ async def add_venue_images(request: Request, files: List[UploadFile],current_use
         return {"success":True, "images":names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 
-@router.put('/menu-images/',response_description='Update Venue Menu image')
-async def add_venue_menu_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
+@router.delete('/images/')
+async def delete_image(id: str, request: Request,images: List[str],type: int= 0,current_user: ShowUserWithId = Depends(validate_venue)): 
+    empty=[]
+    i=1
+    for image in images:
+        print(i)
+        if type==0:
+            update_result=await request.app.mongodb['Venues'].update_one({'_id': id}, {'$pull':{'images': image}})
+        else:
+            update_result=await request.app.mongodb['Venues'].update_one({'_id': id}, {'$pull':{'menu': image}})
+        if os.path.exists(f"media/venues/{image}"):
+            os.remove(f"media/venues/{image}")
+        i=i+1
+        if update_result.modified_count==0: 
+            empty.append(image)
+    if len(empty)==0: 
+        return {"detail":"Successfully deleted image", "not_found":[]}
+    else:
+        return {"detail":"Some images were missing", "not_found":empty}
+
+# @router.put('/menu-images/',response_description='Update Venue Menu image')
+# async def add_venue_menu_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
    
-    names=[]
-    if files is not None: 
-        for file in files:
-                image_name= uuid4()
-                with open(f"media/venues/{image_name}.png", "wb") as buffer:
-                    shutil.copyfileobj(file.file, buffer)
-                names.append(f"{image_name}.png")
-        return {"success":True, "images":names}
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
+#     names=[]
+#     if files is not None: 
+#         for file in files:
+#                 image_name= uuid4()
+#                 with open(f"media/venues/{image_name}.png", "wb") as buffer:
+#                     shutil.copyfileobj(file.file, buffer)
+#                 names.append(f"{image_name}.png")
+#         return {"success":True, "images":names}
+#     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 
 
 @router.put('/featured/images/',response_description='Add Featured Venue image')
@@ -358,6 +420,15 @@ async def rate_venue(request: Request, rating: VenueRating,current_user: ShowUse
     r=await request.app.mongodb['Venues'].update_one({'_id': pid}, {'$set':{'avg_rating': avg,'no_of_rating':count}})
     return {'success':True}
 
+@router.put('/validate-venue',response_description='Update Venue Schedule')
+async def validate_venue(request: Request, id:str,current_user: ShowUser = Depends(validate_admin)):
+    r=await request.app.mongodb['Venues'].update_one({'_id': id}, {'$set':{'validate': True}})
+    print (r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cannot validate venue")
+    return {'sucess':True}
+
+
 @router.put('/update-schedule',response_description='Update Venue Schedule')
 async def update_schedule(request: Request, schedule: Schedule,current_user: ShowUser = Depends(validate_venue)):
     schedule.id=uuid4()
@@ -397,13 +468,65 @@ async def delete_package(request: Request, vid: str,pid: str,current_user: ShowU
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return {'success':True}
 
-@router.put('/book-package',response_description='Book Venue package')
-async def book_package(request: Request,vid: str, pid:str ,current_user: ShowUser = Depends(get_current_user)):
-    r=await request.app.mongodb['Venues'].update_one({'_id': vid,'packages._id':{'$eq':pid}},{'$push':{'packages.$.bookings': {'_id':str(uuid4()),'user_id':current_user['_id'],'name':current_user['full_name'],'email':current_user['email'],'phone':current_user['phone_no'],'complete': False}}})
+@router.put('/delete-schedule',response_description='Delete Venue Schedule')
+async def delete_schedule(request: Request,sid: str,current_user: ShowUser = Depends(validate_venue)):
+    r=await request.app.mongodb['Venues'].update_one({'owner_id': current_user['_id']}, {'$pull':{'todays_schedule':{'_id':sid}}})
     print (r.modified_count)
     if r.modified_count==0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return {'success':True}
+
+
+@router.put('/book-package',response_description='Book Venue package')
+async def book_package(request: Request,vid: str, pid:str ,payment_details: Dict,additional_details: Dict,current_user: ShowUser = Depends(get_current_user)):
+    payload = {
+        'token': payment_details['token'],
+        'amount': payment_details['amount_paid']
+    }
+    headers = {
+        'Authorization': 'Key test_secret_key_a290c9bfc87a4c3f9016af3055f3e882'
+    }
+    url = "https://khalti.com/api/v2/payment/verify/"
+    response = requests.request("POST", url, headers=headers, data=payload)
+    if(response.status_code==200):
+        booking_id= str(uuid4())
+        venue=await request.app.mongodb['Venues'].find_one({'_id': vid,'packages._id':{'$eq':pid}})
+        r=await request.app.mongodb['Venues'].update_one({'_id': vid,'packages._id':{'$eq':pid}},{'$push':{'packages.$.bookings': {'_id':booking_id,'user_id':current_user['_id'],'name':current_user['full_name'],'email':current_user['email'],'phone':current_user['phone_no'],'complete': False,'payment_details':payment_details,'booking_time':datetime.now(pytz.timezone('Asia/Kathmandu'))}}})
+        print (r.modified_count)
+        if r.modified_count==0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
+        user= await request.app.mongodb['Users'].find_one({'_id': current_user['_id']})
+        if user is not None:
+            total_points=0
+            for package in venue['packages']:
+                if package['_id']== pid:
+                    total_points+= package['points']
+            user_point= user['points']
+            await request.app.mongodb['Users'].update_one({'_id': current_user['_id']},{'$set':{'points': user_point+total_points}})  
+            await request.app.mongodb['Users'].update_one({'_id': current_user['_id']},{'$push':{'bookings': {'$each':[{'venue':vid, 'package':pid,'venue_name':additional_details['venue_name'],'package_name':additional_details['package_name'],'booking_id':booking_id,'booking_time':datetime.now(pytz.timezone('Asia/Kathmandu')),'payment_details':payment_details}],'$position': 0}}})    
+
+        return {'success':True}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No transaction found")
+
+@router.put('/test-package',response_description='Book Venue package')
+async def book_package(request: Request,vid: str, pid:str ,payment_details: Dict,current_user: ShowUser = Depends(get_current_user)):
+        r=await request.app.mongodb['Venues'].find_one({'_id': vid,'packages._id':{'$eq':pid}})
+        for package in r['packages']:
+            if package['_id']== pid:
+                print(package['points'])
+    #     r=await request.app.mongodb['Venues'].update_one({'_id': vid,'packages._id':{'$eq':pid}},{'$push':{'packages.$.bookings': {'_id':str(uuid4()),'user_id':current_user['_id'],'name':current_user['full_name'],'email':current_user['email'],'phone':current_user['phone_no'],'complete': False,'payment_details':payment_details}}})
+    #     print (r.modified_count)
+    #     if r.modified_count==0:
+    #         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
+    #     user= await request.app.mongodb['Users'].find_one({'_id': current_user['_id']})
+    #     if user is not None:
+    #         user_point= user['points']
+    #         total_points=0
+    #         total_points+=10
+    #         await request.app.mongodb['Users'].update_one({'_id': current_user['_id']},{'$set':{'points': user_point+total_points}})  
+    #     return {'success':True}
+    # raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No transaction found")
+
 
 @router.put('/complete-booked-package',response_description='Complete booked Venue package')
 async def complete_booked_package(request: Request, pid:str ,bid:str,current_user: ShowUserWithId = Depends(validate_venue)):

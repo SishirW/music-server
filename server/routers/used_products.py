@@ -21,7 +21,7 @@ async def create_product(request: Request,product: CreateUsedProduct,current_use
     
     new_product= await request.app.mongodb['UsedProducts'].insert_one(product)
     #await request.app.mongodb['Products'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['UsedProducts'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [],'seller_id':current_user['_id'], 'seller_email': current_user['email'],'questions':[],'requests_to_buy':[]}})
+    await request.app.mongodb['UsedProducts'].update_one({'_id': new_product.inserted_id}, {'$set':{'seller_id':current_user['_id'], 'seller_email': current_user['email'],'questions':[],'requests_to_buy':[]}})
     return {"success": True, "id":new_product.inserted_id}
 
 
@@ -204,7 +204,10 @@ async def get_products(request: Request,page: int=1,sort:int=0,category: str=Non
         # products=await request.app.mongodb['Products'].find({"category":category}).to_list(1000)
         # if(len(products)==0):
         #     raise HTTPException(status_code=404, detail=f"Products with category {category} not found")
-
+@router.get('/my-used-products',response_description='Get user used products')
+async def get_my_products(request: Request,current_user: ShowUserWithId = Depends(get_current_user)):
+    products=await request.app.mongodb['UsedProducts'].find({"seller_id": current_user['_id']}).to_list(1000000)
+    return products
 @router.get('/questions',response_description='View questions of used Product')
 async def get_product_questions(request: Request, id:str):
     product=await request.app.mongodb['UsedProducts'].find_one({"_id": id})
@@ -285,26 +288,15 @@ async def edit_product(id: str, request: Request,product: EditUsedProduct,curren
 
 
 @router.put('/images/',response_description='Update used Product image')
-
-async def add_product_images(request: Request, id: str, files: List[UploadFile],current_user: ShowUserWithId = Depends(get_current_user)):
-    product_check= await request.app.mongodb['UsedProducts'].find_one({"_id":id})
-    if product_check is None:
-          raise HTTPException(status_code=404, detail=f"Product with id {id} not found")
-    if product_check['seller_id']!= current_user['_id']:
-        raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not Authorized",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+async def add_product_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(get_current_user)):
+    names=[]
     if files is not None: 
         for file in files:
-                image_name= uuid4()
+                image_name= uuid.uuid4()
                 with open(f"media/used_products/{image_name}.png", "wb") as buffer:
                     shutil.copyfileobj(file.file, buffer)
-                update_result=await request.app.mongodb['UsedProducts'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
-                if update_result.matched_count==0: 
-                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Product with id {id} not found')
-        return {"Successfully added new images"}
+                names.append(f"{image_name}.png")
+        return {"success":True, "images":names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 
 @router.delete('/images/')
@@ -321,7 +313,9 @@ async def delete_image(id: str, request: Request,images: List[str],current_user:
     empty=[]
     for image in images:
         update_result=await request.app.mongodb['UsedProducts'].update_one({'_id': id}, {'$pull':{'images': image}})
-        os.remove(f"media/used_products/{image}")
+        if os.path.exists(f"media/used_products/{image}"):
+            os.remove(f"media/used_products/{image}")
+       
         if update_result.modified_count==0: 
             empty.append(image)
     if len(empty)==0: 
