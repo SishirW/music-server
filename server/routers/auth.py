@@ -11,7 +11,11 @@ router= APIRouter(tags=['Authentication'])
 
 @router.post("/token",response_model=Token)
 async def login_for_access_token(request :Request,form_data: OAuth2PasswordRequestForm = Depends()):
+    token= request.headers.get('device-token')
+    print(token)
     user= await request.app.mongodb['Users'].find_one({'username':form_data.username})
+    if user is None:
+        user= await request.app.mongodb['Users'].find_one({'email':form_data.username})
     if not user or not verify_password(form_data.password, user['password']):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -27,8 +31,11 @@ async def login_for_access_token(request :Request,form_data: OAuth2PasswordReque
             detail={"_id": user['_id'], "detail":"Confirm account to continue"},
         )
 
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(days=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
+
+    if token!=None:
+        await request.app.mongodb['Users'].update_one({'_id': user['_id']}, {'$push':{'devices': token}})
     return {"access_token": access_token, "token_type": "bearer","user_info":user}

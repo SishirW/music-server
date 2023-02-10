@@ -118,6 +118,7 @@ class ShowUserWithDetails(ShowUserType):
     username: str
     email: str
     orders: List 
+    following: List
     details: Dict
 
  

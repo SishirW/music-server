@@ -202,7 +202,7 @@ async def get_venue_packages(request: Request,current_user: ShowUser = Depends(v
     venues=await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
     if venues is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
-    datas={'venue_id':venues['_id']}
+    datas={'venue_id':venues['_id'],'venue_name':venues['name']}
     packages=[]
     for data in venues['packages']:
         if data['valid']==False:
@@ -236,7 +236,7 @@ async def get_venue_packages(request: Request,current_user: ShowUser = Depends(v
     venues=await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
     if venues is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
-    datas={'venue_id':venues['_id']}
+    datas={'venue_id':venues['_id'],'venue_name':venues['name']}
     packages=[]
     for data in venues['packages']:
         if data['valid']==True:

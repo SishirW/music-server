@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status
+from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status, BackgroundTasks
 from ..schemas import CreateArtist, ShowUserWithId, ShowArtist, CreateArtistCategory,ShowArtistCategory,EditArtist,ShowArtistEdited,ArtistSchedule
 import uuid
 from typing import List
@@ -6,6 +6,7 @@ from .user import get_current_user, validate_artist,validate_admin,check_is_arti
 import shutil
 from fastapi.encoders import jsonable_encoder
 import os
+from ..background_tasks import send_notification
 
 
 router= APIRouter(prefix= "/artist",tags=["Artist"])
@@ -301,13 +302,17 @@ async def add_artist_images(request: Request, files: List[UploadFile]):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 
 @router.put('/follow',response_description="Follow Artist")
-async def follow_artist(request: Request,id: str,current_user: ShowUserWithId = Depends(get_current_user)):
+async def follow_artist(request: Request,background_tasks: BackgroundTasks,id: str,current_user: ShowUserWithId = Depends(get_current_user)):
     if(current_user["type"]=="artist"):
         artist_info= await request.app.mongodb['Artist'].find_one({'artist_id': current_user['_id']})
         r=await request.app.mongodb['Artist'].update_one({'_id': id}, {'$push':{'followers': {"id":artist_info['_id'],"type":"artist"}}})
         if r.modified_count==0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found")
-        
+        followed_artist= await request.app.mongodb['Artist'].find_one({'_id': id})
+        followed_artist_user= await request.app.mongodb['Users'].find_one({'_id': followed_artist['artist_id']})
+        devices= followed_artist_user['devices']
+        background_tasks.add_task(send_notification,tokens=devices, detail={},type='followed-by-artist',title='Followed by Artist',body='Artist {} has followed you.'.format(artist_info['name']))
+
         await request.app.mongodb['Artist'].update_one({'_id': artist_info['_id']}, {'$push':{'following': id}})
     else:
         r=await request.app.mongodb['Artist'].update_one({'_id': id}, {'$push':{'followers': {"id":current_user['_id'],"type":"user"}}})

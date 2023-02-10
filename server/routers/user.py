@@ -16,7 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth", auto_error=False)
 SECRET_KEY = "e59412a8495ec43e79483d7010399e5647cb9199ccd4f2f3d0de8b05dd773f92"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 3000
+ACCESS_TOKEN_EXPIRE_MINUTES = 10000
 
 
 def randomDigits(digits):
@@ -409,4 +409,9 @@ async def add_device(request: Request, token: str,current_user: ShowUser = Depen
     r= await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$push':{'devices': token}})
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_304_NOT_MODIFIED, detail="Device was not added")
+    return {'success':True}
+
+@router.put('/logout')
+async def add_device(request: Request, token: str,current_user: ShowUser = Depends(get_current_user)):
+    await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$pull':{'devices': token}})
     return {'success':True}

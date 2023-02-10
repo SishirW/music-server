@@ -1,6 +1,6 @@
 import os
 import uuid
-from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status
+from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status,BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional,Set, Union 
@@ -9,19 +9,28 @@ from ..schemas import CreateUsedProduct,ShowUserWithId,ShowUsedProduct,EditUsedP
 import shutil
 from uuid import uuid1, uuid4
 from pydantic import parse_obj_as,Field
+from ..background_tasks import send_notification
+from datetime import datetime
 
 
 router= APIRouter(prefix= "/used-products",tags=["Used products"])
 
 @router.post('/',response_description="Add new used product")
-async def create_product(request: Request,product: CreateUsedProduct,current_user: ShowUserWithId = Depends(get_current_user)):
+async def create_product(request: Request,background_tasks: BackgroundTasks,product: CreateUsedProduct,current_user: ShowUserWithId = Depends(get_current_user)):
     print(current_user)
     product.id= uuid.uuid4()
     product= jsonable_encoder(product)
     
     new_product= await request.app.mongodb['UsedProducts'].insert_one(product)
     #await request.app.mongodb['Products'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['UsedProducts'].update_one({'_id': new_product.inserted_id}, {'$set':{'seller_id':current_user['_id'], 'seller_email': current_user['email'],'questions':[],'requests_to_buy':[]}})
+    await request.app.mongodb['UsedProducts'].update_one({'_id': new_product.inserted_id}, {'$set':{'seller_id':current_user['_id'], 'seller_email': current_user['email'],'date_added':datetime.now(),'questions':[],'requests_to_buy':[]}})
+
+    admin= await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+    
+    devices=[]
+    for users in admin:
+        devices.extend(users['devices'])
+    background_tasks.add_task(send_notification,tokens=devices, detail={},type='new-used-product',title='Used Product',body='User {} has added a new second hand product.'.format(current_user['full_name']))
     return {"success": True, "id":new_product.inserted_id}
 
 
@@ -177,8 +186,8 @@ async def get_products(request: Request,page: int=1,sort:int=0,category: str=Non
     products={}
     product2={}
     if sort==0:
-        products=request.app.mongodb['UsedProducts'].find().skip((page-1)*products_per_page).limit(products_per_page)
-        product2=request.app.mongodb['UsedProducts'].find().skip((page)*products_per_page).limit(products_per_page)
+        products=request.app.mongodb['UsedProducts'].find().sort('date_added',-1).skip((page-1)*products_per_page).limit(products_per_page)
+        product2=request.app.mongodb['UsedProducts'].find().sort('date_added',-1).skip((page)*products_per_page).limit(products_per_page)
     elif sort==1:
         products=request.app.mongodb['UsedProducts'].find().sort('price', 1).skip((page-1)*products_per_page).limit(products_per_page)
         product2=request.app.mongodb['UsedProducts'].find().sort('price', 1).skip((page)*products_per_page).limit(products_per_page)
@@ -346,7 +355,7 @@ async def question_product(request: Request, questions: ProductQuestion,current_
     return {'success':True}
 
 @router.put('/request-to-buy',response_description='Request to buy Used Product')
-async def request_to_buy(request: Request, id: str,request_to_buy: RequestToBuy,current_user: ShowUserWithId = Depends(get_current_user)):
+async def request_to_buy(request: Request, id: str,request_to_buy: RequestToBuy,background_tasks: BackgroundTasks,current_user: ShowUserWithId = Depends(get_current_user)):
     request_to_buy= jsonable_encoder(request_to_buy)
     product_check= await request.app.mongodb['UsedProducts'].find_one({"_id":id})
     if product_check is None:
@@ -357,6 +366,14 @@ async def request_to_buy(request: Request, id: str,request_to_buy: RequestToBuy,
     #print(r.modified_count)
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    
+    admin= await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+    devices=[]
+    for users in admin:
+        devices.extend(users['devices'])
+    product_check= await request.app.mongodb['UsedProducts'].find_one({"_id":id})
+    product_check.pop('date_added')
+    background_tasks.add_task(send_notification,tokens=devices, detail={'requests':product_check['requests_to_buy'], 'product':product_check},type='used-product-request',title='Used Product Request',body='User {} has requested to buy {}'.format(current_user['full_name'], product_check['name']))
     return {'success':True}
 
 

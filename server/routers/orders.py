@@ -1,18 +1,20 @@
 from typing import List
 from urllib import response
 import uuid
-from fastapi import APIRouter,Request,Depends,HTTPException,status
+from fastapi import APIRouter,Request,Depends,HTTPException,status,BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from ..schemas import AddToCart, OrderProduct, ShowCart, ShowProduct, ShowProductCart, ShowUser
 from .user import get_current_user,validate_admin
 import requests
+from ..background_tasks import send_notification
 
 router= APIRouter(prefix= "/order",tags=["Product orders"])
 
 @router.post('/')
-async def place_order(request: Request,orders: OrderProduct,current_user: ShowUser = Depends(get_current_user)):
+async def place_order(request: Request,background_tasks: BackgroundTasks,orders: OrderProduct,current_user: ShowUser = Depends(get_current_user)):
     user= await request.app.mongodb['Users'].find_one({"_id":current_user['_id']})
-    orders.id= uuid.uuid4()
+    order_id=uuid.uuid4()
+    orders.id= order_id
     orders.user_id= current_user['_id']
     orders= jsonable_encoder(orders)
     for order in orders['product_ids']: 
@@ -27,12 +29,22 @@ async def place_order(request: Request,orders: OrderProduct,current_user: ShowUs
     await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$push':{'orders': orders['_id']}})
     for product in orders["product_ids"]:
         await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$pull':{'cart': {"product_id":{"$eq":product["id"]}}}})
+    
+
+    admin= await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+    
+    devices=[]
+    for users in admin:
+        devices.extend(users['devices'])
+    background_tasks.add_task(send_notification,tokens=devices, detail={'id': str(order_id), 'user_id': current_user['_id']},type='orders',title='Order',body='New order by {}'.format(current_user['full_name']))
+
     return {'success':True}
 
 @router.post('/khalti')
-async def place_order_khalti(request: Request,orders: OrderProduct,current_user: ShowUser = Depends(get_current_user)):
+async def place_order_khalti(request: Request,background_tasks: BackgroundTasks,orders: OrderProduct,current_user: ShowUser = Depends(get_current_user)):
     user= await request.app.mongodb['Users'].find_one({"_id":current_user['_id']})
-    orders.id= uuid.uuid4()
+    order_id=uuid.uuid4()
+    orders.id= order_id
     orders.user_id= current_user['_id']
     orders= jsonable_encoder(orders)
     print(orders);
@@ -60,6 +72,13 @@ async def place_order_khalti(request: Request,orders: OrderProduct,current_user:
         await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$push':{'orders': orders['_id']}})
         for product in orders["product_ids"]:
             await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$pull':{'cart': {"product_id":{"$eq":product["id"]}}}})
+        admin= await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+    
+        devices=[]
+        for users in admin:
+            devices.extend(users['devices'])
+        background_tasks.add_task(send_notification,tokens=devices, detail={'id': str(order_id), 'user_id': current_user['_id']},type='orders',title='Order',body='New order by {}'.format(current_user['full_name']))
+
         return {'success':True}
     
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No transaction found")
@@ -83,6 +102,7 @@ async def get_current_orders(request: Request,current_user: ShowUser = Depends(g
                     "status":order["status"],
                     "type":order["type"] ,
                     "image": product["images"][0]})
+    orders.reverse()
     return orders
 
 
@@ -103,6 +123,7 @@ async def get_order_history(request: Request,current_user: ShowUser = Depends(ge
                     "status":order["status"],
                     "type":order["type"] ,
                     "image": product["images"][0]})
+    orders.reverse()
     return orders
 
 
@@ -210,7 +231,7 @@ async def get_orders_detail(request: Request,id: str,current_user: ShowUser = De
 
 
 @router.put('/complete_order',response_description='Complete product Order')
-async def complete_order(request: Request, id: str,type: int=0,current_user: ShowUser = Depends(validate_admin)):
+async def complete_order(request: Request,background_tasks: BackgroundTasks,id: str,type: int=0,current_user: ShowUser = Depends(validate_admin)):
     if type==0:
         r=await request.app.mongodb['Orders'].update_one({'_id': id},{'$set':{'status': 'complete'}})
         order= await request.app.mongodb['Orders'].find_one({'_id': id})
@@ -225,6 +246,11 @@ async def complete_order(request: Request, id: str,type: int=0,current_user: Sho
             await request.app.mongodb['Users'].update_one({'_id': order['user_id']},{'$set':{'points': user_point+total_points}})  
     else:
         r=await request.app.mongodb['Orders'].update_one({'_id': id},{'$set':{'status': 'cancelled'}})
+        order= await request.app.mongodb['Orders'].find_one({'_id': id})
+        user= await request.app.mongodb['Users'].find_one({'_id': order['user_id']})
+        devices=user['devices']
+        background_tasks.add_task(send_notification,tokens=devices, detail={},type='order-cancelled',title='Order Cancelled',body='Your recent order has been cancelled.')
+
     print (r.modified_count)
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")

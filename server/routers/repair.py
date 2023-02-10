@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status
+from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status, BackgroundTasks
 from .user import validate_admin,get_current_user
 from ..schemas import RepairForm,ShowUserWithId
 from fastapi.encoders import jsonable_encoder
@@ -6,18 +6,26 @@ import datetime
 import uuid
 from typing import List
 import shutil
+from ..background_tasks import send_notification
 
 
 router= APIRouter(prefix= "/repair",tags=["Repair"])
 
 @router.post('/',response_description="Enquire for repair")
-async def create_repair(request: Request,repair: RepairForm,current_user: ShowUserWithId = Depends(get_current_user)):
+async def create_repair(request: Request, background_tasks: BackgroundTasks,repair: RepairForm,current_user: ShowUserWithId = Depends(get_current_user)):
     print(current_user)
     repair.id= uuid.uuid4()
     repair.date_time=datetime.datetime.now()
     repair= jsonable_encoder(repair)
     new_repair= await request.app.mongodb['Repair'].insert_one(repair)
     await request.app.mongodb['Repair'].update_one({'_id': new_repair.inserted_id}, {'$set':{'owner_id':current_user['_id']}})
+
+    admin= await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+    
+    devices=[]
+    for users in admin:
+        devices.extend(users['devices'])
+    background_tasks.add_task(send_notification,tokens=devices, detail=repair,type='repair',title='Repair',body='New repair request by {}'.format(current_user['full_name']))
     return {"success": True, "id":new_repair.inserted_id}
 
 @router.get('/')
