@@ -117,6 +117,7 @@ class ShowUserWithDetails(ShowUserType):
     full_name: str
     username: str
     email: str
+    points: int
     orders: List 
     following: List
     details: Dict
@@ -160,7 +161,7 @@ class CreateUser(BaseModel):
     email: EmailStr= Field(...)
     password: str= Field(...)
     verified: bool= True
-    #type: Optional[str]= "user"
+    type: Optional[str]= "user"
     cart: List=[]
     location: Optional[str]=''
     phone_no: Optional[str]=''
@@ -313,8 +314,8 @@ class CreateArtist(BaseModel):
     images: Optional[List]=[]
     followers: Optional[List[Followers]]=[]
     following: Optional[List]=[]
-    skills: List
-    looking_for: Optional[List]=[]
+    skills: str
+    looking_for: Optional[str]=''
     featured: Optional[bool]=False
     todays_schedule: Optional[List[Schedule]]=[]
     video: Optional[str]=''

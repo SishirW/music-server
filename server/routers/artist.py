@@ -36,7 +36,9 @@ async def create_artist(request: Request,artist: CreateArtist,current_user: Show
     return {"success": True, "id":new_artist.inserted_id}
 
 @router.get('/',response_description='Get all artist')
-async def get_artist(request: Request,page: int=1,category: str=None,search:str=None,admin: bool=False,current_user: ShowUserWithId = Depends(check_is_artist)):
+async def get_artist(request: Request,page: int=1,category: str=None,search:str=None,searchtype:int=0,admin: bool=False,current_user: ShowUserWithId = Depends(check_is_artist)):
+    
+    # searchtype= 0 for name , 1 for skill
     print(current_user)
     if page==0:
         page=1
@@ -60,8 +62,12 @@ async def get_artist(request: Request,page: int=1,category: str=None,search:str=
           user_type='user'   
 
     if search !=None:
-        artists=request.app.mongodb['Artist'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*artists_per_page).limit(artists_per_page)
-        artist2=request.app.mongodb['Artist'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*artists_per_page).limit(artists_per_page)
+        if searchtype==0:
+            artists=request.app.mongodb['Artist'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*artists_per_page).limit(artists_per_page)
+            artist2=request.app.mongodb['Artist'].find({"name":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*artists_per_page).limit(artists_per_page)
+        else:
+            artists=request.app.mongodb['Artist'].find({"skills":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page-1)*artists_per_page).limit(artists_per_page)
+            artist2=request.app.mongodb['Artist'].find({"skills":{"$regex":f".*{search}.*",'$options': 'i'}}).skip((page)*artists_per_page).limit(artists_per_page)
         count=0
         async for artist in artists:
             artist['followers_no']=len(artist['followers'])
@@ -180,32 +186,48 @@ async def get_artist(request: Request,page: int=1,category: str=None,search:str=
 
 
 @router.get('/followers',response_description='Get artist followers')
-async def get_artist_followers(request: Request,id: str,page: int,category: str=None):
+async def get_artist_followers(request: Request,current_user: ShowUserWithId = Depends(validate_artist)):
     followers=[]
-    if category is None:
-        products=await request.app.mongodb['Artist'].find().to_list(1000)
-    if id is None: 
-        raise HTTPException(status_code=404, detail=f"Id is missing")
-    else: 
-        artist=await request.app.mongodb['Artist'].find_one({"_id":id})
-        for follower in artist['followers']:
-            info= await request.app.mongodb['Artist'].find_one({"_id":follower})
-            print(info)
-            followers.append({'_id': follower,'name': info['name'],'image': 'image'})
+    no_of_user_followers=0
+    artist=await request.app.mongodb['Artist'].find_one({"artist_id":current_user['_id']})
+    if artist is None:
+        raise HTTPException(status_code=404, detail=f"Artist not found")
+    for follower in artist['followers']:
+        print(follower['type'])
+        if follower['type']=='artist':
+            info= await request.app.mongodb['Artist'].find_one({"_id":follower['id']})
+            if info is not None:
+                artist_info= await request.app.mongodb['Artist'].find_one({'artist_id': current_user['_id']})
+                info["follows"]=False
+                for a in info['followers']: 
+                    if artist_info['_id'] == a['id']:
+                        info["follows"]=True
+                        break
+                    else:
+                        info['follows']=False 
+                followers.append(info)
+        else:
+            no_of_user_followers= no_of_user_followers+1
+        
+    return {'followers':followers, 'user_followers':no_of_user_followers}
 
-        if(len(products)==0):
-            raise HTTPException(status_code=404, detail=f"Products with category {category} not found")
-    
-    return followers
-
-@router.get('/following',response_description='Get artist following', response_model=List[ShowArtist])
-async def get_artist_following(request: Request,id: str):
+@router.get('/following',response_description='Get artist following')
+async def get_artist_following(request: Request,id: str,current_user: ShowUserWithId = Depends(check_is_artist)):
     p=[]
     user_id=''
     user_type=''
-    if(request.headers.__contains__('user_id')):
-        user_id=request.headers['user_id']
-        user_type=request.headers['type']
+    # if(request.headers.__contains__('user_id')):
+    #     user_id=request.headers['user_id']
+    #     user_type=request.headers['type']
+
+    if current_user['type']!='not_logged_in':
+        print(current_user['type'])
+        if current_user['type']=='artist':
+           user_id=current_user['id']
+           user_type='artist'
+        else:
+          user_id=current_user['id']
+          user_type='user'  
     followings=[]
     if id is None: 
         raise HTTPException(status_code=404, detail=f"Id is missing")
@@ -255,7 +277,7 @@ async def get_schedule(request: Request,current_user: ShowUserWithId = Depends(v
     return artist['todays_schedule']
 
 @router.put('/delete-schedule',response_description='Delete Schedule')
-async def delete_package(request: Request, aid: str,sid: str,current_user: ShowUserWithId = Depends(validate_artist)):
+async def delete_schedule(request: Request, aid: str,sid: str,current_user: ShowUserWithId = Depends(validate_artist)):
     r=await request.app.mongodb['Artist'].update_one({'_id': aid}, {'$pull':{'todays_schedule':{'_id':sid}}})
     print (r.modified_count)
     if r.modified_count==0:
@@ -311,7 +333,9 @@ async def follow_artist(request: Request,background_tasks: BackgroundTasks,id: s
         followed_artist= await request.app.mongodb['Artist'].find_one({'_id': id})
         followed_artist_user= await request.app.mongodb['Users'].find_one({'_id': followed_artist['artist_id']})
         devices= followed_artist_user['devices']
-        background_tasks.add_task(send_notification,tokens=devices, detail={},type='followed-by-artist',title='Followed by Artist',body='Artist {} has followed you.'.format(artist_info['name']))
+        print(devices)
+        artist_info['follows']=True
+        background_tasks.add_task(send_notification,tokens=devices, detail=artist_info,type='followed-by-artist',title='Followed by Artist',body='Artist {} has followed you.'.format(artist_info['name']))
 
         await request.app.mongodb['Artist'].update_one({'_id': artist_info['_id']}, {'$push':{'following': id}})
     else:
@@ -361,7 +385,7 @@ async def feature_artist(request: Request,id: str,feature:bool,current_user: Sho
     return {'success':True}
 
 @router.put('/update-schedule',response_description='Update Artist Schedule')
-async def update_schedule(request: Request, schedule: ArtistSchedule,current_user: ShowUserWithId = Depends(validate_artist)):
+async def update_schedule(request: Request, background_tasks: BackgroundTasks,schedule: ArtistSchedule,current_user: ShowUserWithId = Depends(validate_artist)):
     schedule.id=uuid.uuid4()
     schedule=jsonable_encoder(schedule)
     #schedule["_id"]=uuid4()
@@ -369,6 +393,25 @@ async def update_schedule(request: Request, schedule: ArtistSchedule,current_use
     print (r.modified_count)
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artist not found")
+    devices=[]
+    artist=await request.app.mongodb['Artist'].find_one({'artist_id': current_user["_id"]})
+    artist['follows']=True
+    for follower in artist['followers']:
+        if follower['type']=='artist':
+            follower_artist_info= await request.app.mongodb['Artist'].find_one({'_id': follower['id']})
+            if follower_artist_info is not None:
+                follower_artist_user= await request.app.mongodb['Users'].find_one({'_id': follower_artist_info['artist_id']})
+                if follower_artist_user is not None:
+                    user_devices= follower_artist_user['devices']
+                    devices.extend(user_devices)
+        else:
+            user= await request.app.mongodb['Users'].find_one({'_id': follower['id']})
+            if user is not None:
+                user_devices= user['devices']
+                devices.extend(user_devices)
+    
+    background_tasks.add_task(send_notification,tokens=devices, detail=artist,type='artist-schedule',title='{} Schedule'.format(artist['name']),body='{} has added a schedule'.format(artist['name']))
+
     return {'success':True}
 
 @router.get('/category/',response_description='Get all Artist categories', response_model=List[ShowArtistCategory])

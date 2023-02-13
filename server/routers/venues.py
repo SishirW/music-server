@@ -1,4 +1,4 @@
-from fastapi import APIRouter,HTTPException, Depends, Request,status,UploadFile
+from fastapi import APIRouter,HTTPException, Depends, Request,status,UploadFile,BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 
@@ -12,8 +12,11 @@ import requests
 import os
 import pytz
 from datetime import datetime
+from ..background_tasks import send_notification
 
 router= APIRouter(prefix= "/venues",tags=["Venues"])
+
+
 
 @router.post('/')
 async def create_venue(request: Request, venue: CreateVenue,current_user: ShowUserWithId = Depends(get_current_user)):
@@ -31,8 +34,9 @@ async def create_venue(request: Request, venue: CreateVenue,current_user: ShowUs
 
 
 
+
 @router.post('/featured')
-async def make_featured_venue(request: Request, venue: CreateFeatured,current_user: ShowUserWithId = Depends(validate_admin)):
+async def make_featured_venue(request: Request,background_tasks: BackgroundTasks, venue: CreateFeatured,current_user: ShowUserWithId = Depends(validate_admin)):
     venue.id= uuid4()
     venue= jsonable_encoder(venue)
 
@@ -43,9 +47,34 @@ async def make_featured_venue(request: Request, venue: CreateFeatured,current_us
     # venue_check=await request.app.mongodb['Venues'].find_one({'owner_id':current_user['_id']})
     # if venue_check is not None:
     #     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User already has venue")
+
+
     new_venue= await request.app.mongodb['FeaturedVenues'].insert_one(venue)
 
-    print('-------------------------',new_venue.inserted_id)
+    users = await request.app.mongodb['Users'].find().to_list(1000000)
+    devices=[]
+    for user in users:
+        devices.extend(user['devices'])
+
+    venue_to_notify={}
+    package_to_notify={}
+    if(venue['type']=='venue'):
+        venuez=await request.app.mongodb['Venues'].find_one({"_id":venue['venue_id']})
+        for package in venuez['packages']:
+            if package["valid"]==False:
+                venue['packages'].remove(package)
+        venue_to_notify=venuez
+        background_tasks.add_task(send_notification,tokens=devices, detail=venue_to_notify,type='featured-venue',title='Featured Venue',body='Check out new featured venue.')
+    else:
+        featured_venue=await request.app.mongodb['FeaturedVenues'].find_one({"_id":venue['_id']})
+        package_venue=await request.app.mongodb['Venues'].find_one({"_id":venue['venue_id']})
+        for package in package_venue['packages']:
+            if package['_id']==venue['package_id']:
+                featured_venue['venue_name']=package_venue['name']
+                featured_venue['location']=package_venue['location']
+                featured_venue['detail']=package
+        background_tasks.add_task(send_notification,tokens=devices, detail=featured_venue,type='featured-package',title='Featured Package',body='Check out new featured package.')
+
     return {"success": True, "id":new_venue.inserted_id}
 
 @router.get('/',response_description='Get all venues')
@@ -336,6 +365,29 @@ async def delete_featured_venue(id: str, request: Request,current_user: ShowUser
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Venue with id {id} not found")
 
 
+@router.put('/update-package',response_description='Update Venue Package')
+async def update_package(request: Request, package: Package,current_user: ShowUser = Depends(validate_venue)):
+    package.id=uuid4()
+    package=jsonable_encoder(package)
+    #package["_id"]=uuid4()
+    r=await request.app.mongodb['Venues'].update_one({'owner_id': current_user["_id"]}, {'$push':{'packages': package}})
+    print (r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
+    return {'sucess':True}
+
+@router.put('/update-schedule',response_description='Update Venue Schedule')
+async def update_schedule(request: Request,current_user: ShowUser = Depends(validate_venue)):
+    schedule.id=uuid4()
+    schedule=jsonable_encoder(schedule)
+    #schedule["_id"]=uuid4()
+    r=await request.app.mongodb['Venues'].update_one({'owner_id': current_user["_id"]}, {'$push':{'todays_schedule': schedule}})
+    print (r.modified_count)
+    if r.modified_count==0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
+    return {'sucess':True}
+
+
 @router.put('/images/',response_description='Update Venue image')
 async def add_venue_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
     names=[]
@@ -367,6 +419,8 @@ async def delete_image(id: str, request: Request,images: List[str],type: int= 0,
         return {"detail":"Successfully deleted image", "not_found":[]}
     else:
         return {"detail":"Some images were missing", "not_found":empty}
+
+
 
 # @router.put('/menu-images/',response_description='Update Venue Menu image')
 # async def add_venue_menu_images(request: Request, files: List[UploadFile],current_user: ShowUserWithId = Depends(validate_venue)):
@@ -429,27 +483,7 @@ async def validate_venue(request: Request, id:str,current_user: ShowUser = Depen
     return {'sucess':True}
 
 
-@router.put('/update-schedule',response_description='Update Venue Schedule')
-async def update_schedule(request: Request, schedule: Schedule,current_user: ShowUser = Depends(validate_venue)):
-    schedule.id=uuid4()
-    schedule=jsonable_encoder(schedule)
-    #schedule["_id"]=uuid4()
-    r=await request.app.mongodb['Venues'].update_one({'owner_id': current_user["_id"]}, {'$push':{'todays_schedule': schedule}})
-    print (r.modified_count)
-    if r.modified_count==0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
-    return {'sucess':True}
 
-@router.put('/update-package',response_description='Update Venue Package')
-async def update_package(request: Request, package: Package,current_user: ShowUser = Depends(validate_venue)):
-    package.id=uuid4()
-    package=jsonable_encoder(package)
-    #package["_id"]=uuid4()
-    r=await request.app.mongodb['Venues'].update_one({'owner_id': current_user["_id"]}, {'$push':{'packages': package}})
-    print (r.modified_count)
-    if r.modified_count==0:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
-    return {'sucess':True}
 
 @router.put('/invalidate-package',response_description='Update Venue Package')
 async def invalidate_package(request: Request, pid: str,current_user: ShowUser = Depends(validate_venue)):
@@ -457,7 +491,7 @@ async def invalidate_package(request: Request, pid: str,current_user: ShowUser =
     print (r.modified_count)
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    return {'sucess':True}
+    return {'success':True}
 
 
 @router.put('/delete-package',response_description='Delete Venue Package')
@@ -478,7 +512,7 @@ async def delete_schedule(request: Request,sid: str,current_user: ShowUser = Dep
 
 
 @router.put('/book-package',response_description='Book Venue package')
-async def book_package(request: Request,vid: str, pid:str ,payment_details: Dict,additional_details: Dict,current_user: ShowUser = Depends(get_current_user)):
+async def book_package(request: Request,vid: str, pid:str,package_name:str ,background_tasks: BackgroundTasks,payment_details: Dict,additional_details: Dict,current_user: ShowUser = Depends(get_current_user)):
     payload = {
         'token': payment_details['token'],
         'amount': payment_details['amount_paid']
@@ -491,7 +525,7 @@ async def book_package(request: Request,vid: str, pid:str ,payment_details: Dict
     if(response.status_code==200):
         booking_id= str(uuid4())
         venue=await request.app.mongodb['Venues'].find_one({'_id': vid,'packages._id':{'$eq':pid}})
-        r=await request.app.mongodb['Venues'].update_one({'_id': vid,'packages._id':{'$eq':pid}},{'$push':{'packages.$.bookings': {'_id':booking_id,'user_id':current_user['_id'],'name':current_user['full_name'],'email':current_user['email'],'phone':current_user['phone_no'],'complete': False,'payment_details':payment_details,'booking_time':datetime.now(pytz.timezone('Asia/Kathmandu'))}}})
+        r=await request.app.mongodb['Venues'].update_one({'_id': vid,'packages._id':{'$eq':pid}},{'$push':{'packages.$.bookings': {'_id':booking_id,'user_id':current_user['_id'],'name':current_user['full_name'],'email':current_user['email'],'phone':current_user['phone_no'],'complete': False,'payment_details':payment_details,'booking_time':str(datetime.now(pytz.timezone('Asia/Kathmandu')))}}})
         print (r.modified_count)
         if r.modified_count==0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
@@ -504,6 +538,16 @@ async def book_package(request: Request,vid: str, pid:str ,payment_details: Dict
             user_point= user['points']
             await request.app.mongodb['Users'].update_one({'_id': current_user['_id']},{'$set':{'points': user_point+total_points}})  
             await request.app.mongodb['Users'].update_one({'_id': current_user['_id']},{'$push':{'bookings': {'$each':[{'venue':vid, 'package':pid,'venue_name':additional_details['venue_name'],'package_name':additional_details['package_name'],'booking_id':booking_id,'booking_time':datetime.now(pytz.timezone('Asia/Kathmandu')),'payment_details':payment_details}],'$position': 0}}})    
+        
+        admin= await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+        devices=[]
+        for users in admin:
+            devices.extend(users['devices'])
+        venue_to_send= await request.app.mongodb['Venues'].find_one({'_id': vid})
+        user_venue= await request.app.mongodb['Users'].find_one({'_id': venue['owner_id']})
+        devices.extend(user_venue['devices'])
+
+        background_tasks.add_task(send_notification,tokens=devices, detail={'venue_id':vid,'venue_name':venue['name']},type='package-booking',title='Package Booking',body='{} has booked package {}'.format(current_user['full_name'], package_name))
 
         return {'success':True}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No transaction found")

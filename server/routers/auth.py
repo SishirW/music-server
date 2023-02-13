@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Request, Depends,HTTPException,status
+from fastapi import APIRouter, Request, Depends,HTTPException,status,BackgroundTasks
 from datetime import datetime, timedelta
 from ..schemas import Token, TokenData
 from ..password_methods import verify_password
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from .user import create_access_token,ACCESS_TOKEN_EXPIRE_MINUTES
 from .user import randomDigits
+from .user import send_email
 
 router= APIRouter(tags=['Authentication'])
 
 
 @router.post("/token",response_model=Token)
-async def login_for_access_token(request :Request,form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_for_access_token(request :Request,background_tasks: BackgroundTasks,form_data: OAuth2PasswordRequestForm = Depends()):
     token= request.headers.get('device-token')
     print(token)
     user= await request.app.mongodb['Users'].find_one({'username':form_data.username})
@@ -26,6 +27,8 @@ async def login_for_access_token(request :Request,form_data: OAuth2PasswordReque
     created_at= datetime.now()
     if user['verified']==False:
         await request.app.mongodb['Users'].update_one({'username': form_data.username}, {'$push':{'validation_token':{'number':validation_number, 'created_at': str(created_at)}}})
+        background_tasks.add_task(send_email,email=user['email'],message=f'Your Confirmation code is {validation_number} .')
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"_id": user['_id'], "detail":"Confirm account to continue"},

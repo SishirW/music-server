@@ -1,6 +1,6 @@
 from urllib import request
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Request,status, Header
+from fastapi import APIRouter, Depends, HTTPException, Request,status, Header, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from typing import Union,List
 from datetime import datetime,timedelta
@@ -9,6 +9,8 @@ from ..schemas import CreateUser,ShowUser, ShowUserType, ShowUserDetailsAdmin,Sh
 from ..password_methods import get_password_hash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import random
+import smtplib
+from email.mime.text import MIMEText
 router= APIRouter(tags=['User'], prefix='/user')
 
 
@@ -32,10 +34,26 @@ def randomDigits(digits):
 #     return user
 
 
+async def send_email(email: str, message: str):
+   
+    smtp_server= smtplib.SMTP('smtp-mail.outlook.com', 587)
+    smtp_server.ehlo()
+    smtp_server.starttls()
+    smtp_server.login("", "")
+    print('--------')
+    msg = MIMEText(message)
+    msg["Subject"] = "Confirmation Code for account creation"
+    msg["To"] = email
+    msg["From"] = ""
 
+    smtp_server.send_message(msg)
+    return "Email sent successfully!"
+
+
+    
 
 @router.post('/', status_code=status.HTTP_201_CREATED)
-async def create_user(request: Request, user: CreateUser):
+async def create_user(request: Request, user: CreateUser,background_tasks: BackgroundTasks):
     user.id= uuid.uuid4()
     user.password= get_password_hash(user.password)
     username= user.username
@@ -59,6 +77,8 @@ async def create_user(request: Request, user: CreateUser):
     new_user= await request.app.mongodb['Users'].insert_one(user)
     validation_number= randomDigits(5)
     await request.app.mongodb['Users'].update_one({'_id': new_user.inserted_id}, {'$set':{'points':0,'bookings':[], 'devices':[],'validation_token':[{'number':validation_number, 'created_at': created_at}]}})
+    background_tasks.add_task(send_email,email=user['email'],message=f'Your Confirmation code is {validation_number} .')
+
     return {'_id':new_user.inserted_id}
 
 
@@ -76,7 +96,14 @@ async def verify_user(request: Request, id: str,token:int):
             if difference_in_hour<2:
                 r= await request.app.mongodb['Users'].update_one({'_id': id},{'$set':{'verified': True}})  
                 print(r.modified_count)
-                return {'success':True}
+                access_token_expires = timedelta(days=ACCESS_TOKEN_EXPIRE_MINUTES)
+                access_token = create_access_token(
+                    data={"sub": user['username']}, expires_delta=access_token_expires
+                )
+
+                if token!=None:
+                    await request.app.mongodb['Users'].update_one({'_id': user['_id']}, {'$push':{'devices': token}})
+                return {"access_token": access_token, "token_type": "bearer","user_info":user}
             else:
                 raise  HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="Expired code",)
             
@@ -121,6 +148,9 @@ def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None
 #     return user
 
 
+
+
+
 async def get_current_user(request: Request,token: str = Depends(oauth2_scheme)):
     #print(token)
     credentials_exception = HTTPException(
@@ -143,9 +173,12 @@ async def get_current_user(request: Request,token: str = Depends(oauth2_scheme))
         raise credentials_exception
     return user
 
+
+
+
 async def check_is_artist(request: Request,token: str = Depends(optional_oauth2_scheme)):
     if token is None:
-        return {'type':'not_logged_in'}
+        return {'type':'not_logged_in','following':[]}
     #print('---------------------- ',token)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -163,7 +196,7 @@ async def check_is_artist(request: Request,token: str = Depends(optional_oauth2_
     user =await request.app.mongodb['Users'].find_one({'username':username})
     if user is None:
         return {'type':'not_logged_in'}
-    return {'type':user['type'],'id':user['_id']}
+    return {'type':user['type'],'id':user['_id'],'following':user['following']}
 
 async def get_details(request: Request,token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -350,16 +383,22 @@ async def get_users(request: Request,page: int=1,search:str=None,current_user: S
 
 
 @router.get('/get_details', response_model=ShowUserWithDetails)
-async def get_user_details(request: Request,current_user: ShowUser = Depends(get_current_user)):
+async def get_user_details(request: Request,current_user: ShowUserWithId = Depends(get_current_user)):
     user=await request.app.mongodb['Users'].find_one({"_id":current_user["_id"]})
     if user is None: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
     if user['type']=='artist':
         artist_check=await request.app.mongodb['Artist'].find_one({'artist_id':current_user['_id']})
-        user['details']=artist_check
+        if artist_check is not None:
+            user['details']=artist_check
+        else:
+            user['details']={}
     elif user['type']=='venue':
         venue_check=await request.app.mongodb['Venues'].find_one({'owner_id':current_user['_id']})
-        user['details']=venue_check
+        if venue_check is not None:
+            user['details']=venue_check
+        else:
+            user['details']={}
     else:
        user['details']={} 
     return user
@@ -415,3 +454,58 @@ async def add_device(request: Request, token: str,current_user: ShowUser = Depen
 async def add_device(request: Request, token: str,current_user: ShowUser = Depends(get_current_user)):
     await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$pull':{'devices': token}})
     return {'success':True}
+
+
+@router.get('/following',response_description='Get artist following')
+async def get_following(request: Request,current_user: ShowUserWithId = Depends(check_is_artist)):
+    p=[]
+    user_id=''
+    user_type=''
+    # if(request.headers.__contains__('user_id')):
+    #     user_id=request.headers['user_id']
+    #     user_type=request.headers['type']
+
+    if current_user['type']!='not_logged_in':
+        print(current_user['type'])
+        if current_user['type']=='artist':
+           user_id=current_user['id']
+           user_type='artist'
+        else:
+          user_id=current_user['id']
+          user_type='user'  
+    followings=[]
+     
+    
+    for following in current_user['following']:
+        info= await request.app.mongodb['Artist'].find_one({"_id":following})
+        print(info)
+        if info is not None:
+            info['followers_no']=len(info['followers'])
+            info['following_no']=len(info['following'])
+            if user_id=='':
+                info["follows"]=False
+            else:
+                if user_type=='artist':
+                    artist_info= await request.app.mongodb['Artist'].find_one({'artist_id': user_id})
+                    print(artist_info)
+                    info["follows"]=False
+                    for a in info['followers']: 
+                        if artist_info['_id'] == a['id']:
+                            info["follows"]=True
+                            break
+                        else:
+                            info['follows']=False 
+                else:
+                    info["follows"]=False
+                    for a in info['followers']: 
+                        if user_id == a['id']:
+                            info["follows"]=True
+                            break
+                        else:
+                            info['follows']=False 
+            # p.append(artist)
+            
+            followings.append(info)
+
+    
+    return followings

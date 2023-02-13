@@ -10,3 +10,4 @@ pymongo[srv]
 pydantic[email]
 requests
 pytz
+firebase-admin
