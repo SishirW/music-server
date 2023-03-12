@@ -1,22 +1,16 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from server.routers import musical_products,user,auth,venues,cart,orders,artist,packages,grow,used_products,repair,ads
+from server.routers import musical_products, user, auth, venues, cart, orders, artist, packages, grow, used_products, repair, ads
 from motor.motor_asyncio import AsyncIOMotorClient
-from . import models
-#from fastapi.middleware.cors import CORSMiddleware
+# from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.cors import CORSMiddleware
-
-
-
-# from .database import SessionLocal, engine
-# models.Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(
     title="Music server",
-     description= "You are currently seeing backend of music products ecommerce app.",
-     version="0.0.1",
-     )
+    description="You are currently seeing backend of music products ecommerce app.",
+    version="0.0.1",
+)
 
 origins = ['*']
 
@@ -29,8 +23,8 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-#connection_string="mongodb+srv://SishirW:JAkJaCmAPcxLoZn8@music.ohrew.mongodb.net/?retryWrites=true&w=majority"
-connection_string="mongodb://localhost:27017"
+# connection_string = "mongodb+srv://SishirW:JAkJaCmAPcxLoZn8@music.ohrew.mongodb.net/?retryWrites=true&w=majority"
+connection_string = "mongodb://0.0.0.0:27017"
 
 
 @app.on_event("startup")
@@ -57,12 +51,11 @@ app.include_router(repair.router)
 app.include_router(ads.router)
 
 
-
-
 @app.get("/")
 async def root():
     return {"Welcome": "Welcome to Music app"}
 
+
 @app.get("/media/{path}/{id}")
-async def get_media(id: str,path:str):
+async def get_media(id: str, path: str):
     return FileResponse(f'media/{path}/{id}')
