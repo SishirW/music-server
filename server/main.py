@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from server.routers import musical_products, user, auth, venues, cart, orders, artist, packages, grow, used_products, repair, ads
+from server.routers_new import instruments, genres, bands
 from motor.motor_asyncio import AsyncIOMotorClient
-# from fastapi.middleware.cors import CORSMiddleware
+
 from starlette.middleware.cors import CORSMiddleware
 
 
@@ -24,7 +25,9 @@ app.add_middleware(
 )
 
 # connection_string = "mongodb+srv://SishirW:JAkJaCmAPcxLoZn8@music.ohrew.mongodb.net/?retryWrites=true&w=majority"
-connection_string = "mongodb://0.0.0.0:27017"
+# connection_string = "mongodb://0.0.0.0:27017"
+connection_string = "mongodb://localhost:27017"
+# connection_string = "mongodb+srv://user:LAAAPFukxhKyQoHq@music-app.lnlw82c.mongodb.net/test"
 
 
 @app.on_event("startup")
@@ -37,18 +40,28 @@ async def start_database():
 async def shutdown_db_client():
     app.mongodb_client.close()
 
+# For band
+app.include_router(bands.router)
+app.include_router(instruments.router)
+app.include_router(genres.router)
+# For Authentication
+app.include_router(auth.router)
+# Users
+app.include_router(user.router)
+app.include_router(artist.router)
+# Products and Repairs
 app.include_router(used_products.router)
 app.include_router(musical_products.router)
-app.include_router(cart.router)
-app.include_router(user.router)
-app.include_router(auth.router)
 app.include_router(venues.router)
-# app.include_router(packages.router)
-app.include_router(orders.router)
-app.include_router(artist.router)
-app.include_router(grow.router)
 app.include_router(repair.router)
+# Orders
+app.include_router(cart.router)
+app.include_router(orders.router)
+app.include_router(grow.router)
+# Ads
 app.include_router(ads.router)
+
+# app.include_router(packages.router)
 
 
 @app.get("/")

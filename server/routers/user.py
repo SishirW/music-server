@@ -289,7 +289,6 @@ async def validate_admin(request: Request, token: str = Depends(oauth2_scheme)):
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
     user = await request.app.mongodb['Users'].find_one({'username': username})

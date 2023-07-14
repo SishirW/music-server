@@ -1,6 +1,8 @@
 from bson import ObjectId
 from pydantic import BaseModel as PydanticBaseModel
-from pydantic import Field
+from pydantic import Field, root_validator
+from datetime import datetime
+import uuid
 
 
 class PyObjectId(ObjectId):
@@ -20,9 +22,14 @@ class PyObjectId(ObjectId):
 
 
 class BaseModel(PydanticBaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    id: PyObjectId = Field(default_factory=uuid.uuid4, alias="_id")
+    created_at: datetime = datetime.now()
+    updated_at: datetime = datetime.now()
 
     class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+        validate_assignment = True
+
+    @root_validator
+    def number_validator(cls, values):
+        values["updated_at"] = datetime.now()
+        return values
