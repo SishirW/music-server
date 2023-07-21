@@ -117,7 +117,9 @@ async def find_relevant_bands(db, user, lat, long, page, limit):
     for band in bands:
         lon2, lat2 = band['location']['geometry']['coordinates']
         band['distance'] = get_distance(lat, long, lat2, lon2)
-
+        band_creator = await db['Users'].find_one({'username': band['created_by']})
+        artist_profile = await db['Artist'].find_one({'artist_id': band_creator['_id']})
+        band['artist'] = artist_profile
     return bands
 
 
