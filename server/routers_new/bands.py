@@ -5,6 +5,7 @@ from server.schemas_new.bands import AddBandSchema
 from server.models.bands import add_new_band, find_all_bands, get_total_band_count, find_band_by_id, delete_band_by_id
 from fastapi.encoders import jsonable_encoder
 
+from server.utils.location import get_location_from_header
 
 from server.db import get_database
 
@@ -14,14 +15,16 @@ router = APIRouter(prefix="/bands", tags=["Bands"])
 @router.get('/')
 async def get_bands(request: Request, page=1, limit=5):
     db = get_database(request)
-    result = await find_all_bands(db, int(page), int(limit))
+    location = get_location_from_header(request)
+    result = await find_all_bands(db, location, int(page), int(limit))
     return jsonable_encoder(result)
 
 
 @router.post('/')
 async def add_band(request: Request, band: AddBandSchema, current_user: ShowUser = Depends(validate_artist)):
     db = get_database(request)
-    result = await add_new_band(db, band, current_user)
+    location = get_location_from_header(request)
+    result = await add_new_band(db, band, location, current_user)
     return jsonable_encoder(result)
 
 

@@ -6,6 +6,8 @@ from fastapi import HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.bands import AddBandSchema
 
+from server.utils.location import get_distance
+
 from . import BaseModel
 
 collection_name = "Bands"
@@ -50,10 +52,10 @@ async def get_relevant_band_count(db):
     return count
 
 
-async def add_new_band(db, band: AddBandSchema, user):
+async def add_new_band(db, band: AddBandSchema, location, user):
     location = {
         "type": "Feature",
-        "geometry": {"type": "Point", "coordinates": [-73.9928, 40.7193]},
+        "geometry": {"type": "Point", "coordinates": [location['long'], location['lat']]},
         "properties": {
             "category": "Stadiums",
             "name": user['username']
@@ -85,14 +87,16 @@ async def delete_band_by_id(db, id):
                             detail=f"band not found!")
 
 
-async def find_all_bands(db, page, limit):
+async def find_all_bands(db, location, page, limit):
     # bands = await db[collection_name].find().skip(
     #     (page-1)*limit).limit(limit).to_list(limit+1)
-    bands = await find_relevant_bands(db, page, limit)
+    lat = location['lat']
+    long = location['long']
+    bands = await find_relevant_bands(db, lat, long, page, limit)
     return bands
 
 
-async def find_relevant_bands(db, page, limit):
+async def find_relevant_bands(db, lat, long, page, limit):
 
     bands = await db[collection_name].find({
         'location.geometry': {
@@ -100,7 +104,7 @@ async def find_relevant_bands(db, page, limit):
                 '$geometry': {
                     'type': 'Point',
                     'coordinates': [
-                        -70, 40
+                        long, lat
                     ]
                 },
                 '$minDistance': 0,
@@ -109,6 +113,10 @@ async def find_relevant_bands(db, page, limit):
         }
     }).skip(
         (page-1)*limit).limit(limit).to_list(limit+1)
+    for band in bands:
+        lon2, lat2 = band['location']['geometry']['coordinates']
+        band['distance'] = get_distance(lat, long, lat2, lon2)
+
     return bands
 
 
