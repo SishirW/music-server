@@ -26,7 +26,7 @@ async def get_bands(request: Request, page=1, limit=5,  current_user: ShowUser =
 async def get_my_bands(request: Request, page=1, limit=5,  current_user: ShowUser = Depends(validate_artist)):
     db = get_database(request)
     result = await find_all_bands_for_a_user(db, current_user, int(page), int(limit))
-    return jsonable_encoder({"bands": result})
+    return jsonable_encoder(result)
 
 
 @router.post('/')

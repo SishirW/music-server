@@ -106,7 +106,9 @@ async def find_all_bands_for_a_user(db, user, page, limit):
         'created_by': user['username']
     }).skip(
         (page-1)*limit).limit(limit).to_list(limit+1)
-    return bands
+    artist_profile = await db['Artist'].find_one({'artist_id': user['_id']})
+    return {"bands": bands,
+            "artist": artist_profile}
 
 
 async def find_relevant_bands(db, user, lat, long, page, limit):
