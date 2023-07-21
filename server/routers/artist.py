@@ -36,6 +36,8 @@ async def create_artist(request: Request, artist: CreateArtist, current_user: Sh
     return {"success": True, "id": new_artist.inserted_id}
 
 
+# @router.get('/', response_description='Get all artist')
+# async def get_artist(request: Request, page: int = 1, category: str = None, search: str = None, searchtype: int = 0, admin: bool = False, current_user: ShowUserWithId = Depends(check_is_artist)):
 @router.get('/', response_description='Get all artist')
 async def get_artist(request: Request, page: int = 1, category: str = None, search: str = None, searchtype: int = 0, admin: bool = False, current_user: ShowUserWithId = Depends(check_is_artist)):
 

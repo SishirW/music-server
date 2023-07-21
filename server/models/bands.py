@@ -7,11 +7,11 @@ from fastapi.encoders import jsonable_encoder
 from server.schemas_new.bands import AddBandSchema
 
 from server.utils.location import get_distance
+from server.models.applications import find_applications_for_a_band
 
 from . import BaseModel
 
 collection_name = "Bands"
-location_collection_name = "Locations"
 
 
 class Geometry(PydanticBaseModel):
@@ -65,16 +65,21 @@ async def add_new_band(db, band: AddBandSchema, location, user):
         name=band.name, genres=band.genres, description=band.description, location=location, created_by=user['username'])
     encoded = jsonable_encoder(bnd)
     await db[collection_name].insert_one(encoded)
-    new_band = await find_band_by_id(db, str(bnd.id))
-    print(str(bnd.id))
+    new_band = await find_band_by_id(db, str(bnd.id), user)
     return new_band
 
 
-async def find_band_by_id(db, id):
+async def find_band_by_id(db, id, current_user):
     band = await db[collection_name].find_one({"_id": id})
     if band is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"band not found!")
+    band_creator = await db['Users'].find_one({'username': band['created_by']})
+    artist_profile = await db['Artist'].find_one({'artist_id': band_creator['_id']})
+    band['artist'] = artist_profile
+    if current_user['username'] == band['created_by']:
+        band['applications'] = await find_applications_for_a_band(db, id)
+
     return band
 
 
@@ -93,6 +98,14 @@ async def find_all_bands(db, user, location, page, limit):
     lat = location['lat']
     long = location['long']
     bands = await find_relevant_bands(db, user, lat, long, page, limit)
+    return bands
+
+
+async def find_all_bands_for_a_user(db, user, page, limit):
+    bands = await db[collection_name].find({
+        'created_by': user['username']
+    }).skip(
+        (page-1)*limit).limit(limit).to_list(limit+1)
     return bands
 
 
@@ -122,6 +135,5 @@ async def find_relevant_bands(db, user, lat, long, page, limit):
         band['artist'] = artist_profile
     return bands
 
-
-# async def update_band(db,id,data):
-#     band
+    # async def update_band(db,id,data):
+    #     band

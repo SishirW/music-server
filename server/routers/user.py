@@ -278,6 +278,25 @@ async def validate_venue(request: Request, token: str = Depends(oauth2_scheme)):
     return user
 
 
+async def validate_user(request: Request, token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not Authorized",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = await request.app.mongodb['Users'].find_one({'username': username})
+    if user is None:
+        raise credentials_exception
+    return user
+
+
 async def validate_admin(request: Request, token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
