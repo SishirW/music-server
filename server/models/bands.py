@@ -87,18 +87,19 @@ async def delete_band_by_id(db, id):
                             detail=f"band not found!")
 
 
-async def find_all_bands(db, location, page, limit):
+async def find_all_bands(db, user, location, page, limit):
     # bands = await db[collection_name].find().skip(
     #     (page-1)*limit).limit(limit).to_list(limit+1)
     lat = location['lat']
     long = location['long']
-    bands = await find_relevant_bands(db, lat, long, page, limit)
+    bands = await find_relevant_bands(db, user, lat, long, page, limit)
     return bands
 
 
-async def find_relevant_bands(db, lat, long, page, limit):
+async def find_relevant_bands(db, user, lat, long, page, limit):
 
     bands = await db[collection_name].find({
+        'created_by': {'$ne': user['username']},
         'location.geometry': {
             '$near': {
                 '$geometry': {

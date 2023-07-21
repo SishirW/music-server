@@ -13,11 +13,11 @@ router = APIRouter(prefix="/bands", tags=["Bands"])
 
 
 @router.get('/')
-async def get_bands(request: Request, page=1, limit=5):
+async def get_bands(request: Request, page=1, limit=5,  current_user: ShowUser = Depends(validate_artist)):
     db = get_database(request)
     location = get_location_from_header(request)
-    result = await find_all_bands(db, location, int(page), int(limit))
-    return jsonable_encoder(result)
+    result = await find_all_bands(db, current_user, location, int(page), int(limit))
+    return jsonable_encoder({"bands": result})
 
 
 @router.post('/')
