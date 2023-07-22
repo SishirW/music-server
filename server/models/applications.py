@@ -22,10 +22,14 @@ async def create_new_application(db, band_id, artist_id):
 
 
 async def find_applications_for_a_band(db, band_id):
-    band_application = await db[collection_name].find({"band_id": band_id}).to_list(100)
-    if band_application is None:
+    band_applications = await db[collection_name].find({"band_id": band_id}).to_list(100)
+    if band_applications is None:
         return []
-    return band_application
+    for application in band_applications:
+        application['artist'] = await db['Artist'].find_one(
+            {"artist_id": application['artist_id']})
+        # print(application)
+    return band_applications
 
 
 async def find_band_application_by_id(db, id):
