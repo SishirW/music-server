@@ -30,10 +30,16 @@ class Location(PydanticBaseModel):
     properties: Properties
 
 
+class Genre(PydanticBaseModel):
+    instrumentName: str
+    count: int
+
+
 class Band(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    genres: Optional[List[str]] = None
+    skills: Optional[List[str]] = None
+    genres: List[Genre]
     location: Location
     created_by: str
 
@@ -62,7 +68,7 @@ async def add_new_band(db, band: AddBandSchema, location, user):
         }
     }
     bnd = Band(
-        name=band.name, genres=band.genres, description=band.description, location=location, created_by=user['username'])
+        name=band.name, skills=band.skills, genres=band.genres, description=band.description, location=location, created_by=user['username'])
     encoded = jsonable_encoder(bnd)
     await db[collection_name].insert_one(encoded)
     new_band = await find_band_by_id(db, str(bnd.id), user)
