@@ -38,7 +38,17 @@ async def place_order(request: Request,background_tasks: BackgroundTasks,orders:
         devices.extend(users['devices'])
     background_tasks.add_task(send_notification,tokens=devices, detail={'id': str(order_id), 'user_id': current_user['_id']},type='orders',title='Order',body='New order by {}'.format(current_user['full_name']))
 
-    return {'success':True}
+
+
+    order= await request.app.mongodb['Orders'].find_one({"_id":str(order_id)})
+    for o in order["product_ids"]:
+        product=await request.app.mongodb['Products'].find_one({"_id":o['id']})
+        if product is not None:
+            o["name"]=product["name"]
+        else:
+            o["name"]="Deleted Product"
+    
+    return order
 
 @router.post('/khalti')
 async def place_order_khalti(request: Request,background_tasks: BackgroundTasks,orders: OrderProduct,current_user: ShowUser = Depends(get_current_user)):
@@ -79,7 +89,16 @@ async def place_order_khalti(request: Request,background_tasks: BackgroundTasks,
             devices.extend(users['devices'])
         background_tasks.add_task(send_notification,tokens=devices, detail={'id': str(order_id), 'user_id': current_user['_id']},type='orders',title='Order',body='New order by {}'.format(current_user['full_name']))
 
-        return {'success':True}
+
+        order= await request.app.mongodb['Orders'].find_one({"_id":str(order_id)})
+        for o in order["product_ids"]:
+            product=await request.app.mongodb['Products'].find_one({"_id":o['id']})
+            if product is not None:
+                o["name"]=product["name"]
+            else:
+                o["name"]="Deleted Product"
+        
+        return order
     
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No transaction found")
 

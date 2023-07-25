@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Request, Body, status, BackgroundTasks
-from ..schemas import CreateArtist, ShowUserWithId, ShowArtist, CreateArtistCategory,ShowArtistCategory,EditArtist,ShowArtistEdited,ArtistSchedule
+from ..schemas import CreateArtist, ShowUserWithId, ShowArtist, CreateArtistCategory,EditCategory,ShowArtistCategory,EditArtist,ShowArtistEdited,ArtistSchedule
 import uuid
 from typing import List
 from .user import get_current_user, validate_artist,validate_admin,check_is_artist
@@ -414,9 +414,9 @@ async def update_schedule(request: Request, background_tasks: BackgroundTasks,sc
 
     return {'success':True}
 
-@router.get('/category/',response_description='Get all Artist categories', response_model=List[ShowArtistCategory])
+@router.get('/category/',response_description='Get all Artist categories')
 async def get_artist_categories(request: Request):
-    categories=await request.app.mongodb['ArtistCategory'].find().to_list(1000)
+    categories=await request.app.mongodb['ArtistCategory'].find().to_list(1000000)
     #print(categories)
     return categories
 
@@ -429,12 +429,12 @@ async def create_artist_category(request: Request,category: CreateArtistCategory
     return {"success": True}
 
 @router.delete('/category/{name}', status_code=status.HTTP_204_NO_CONTENT)
-async def delete_artist_category(name: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
-    delete_product= await request.app.mongodb['ArtistCategory'].delete_one({'category': name})
+async def delete_artist_category(id: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
+    delete_product= await request.app.mongodb['ArtistCategory'].delete_one({'_id': id})
     if delete_product.deleted_count==1:
-        return {f"Successfully deleted product with name {name}"}
+        return {f"Successfully deleted product with id {id}"}
     else:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with name {name} not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with id {id} not found")
 
 @router.delete('/', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_artist(id: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
@@ -467,3 +467,31 @@ async def delete_image(id: str, request: Request,images: List[str],current_user:
         return {"detail":"Successfully deleted image", "not_found":[]}
     else:
         return {"detail":"Some images were missing", "not_found":empty}
+
+
+@router.put('/category/', response_description='Update Product')
+async def edit_category(id: str, request: Request,product: EditCategory,current_user: ShowUserWithId = Depends(validate_admin)):
+    #print('-----------------------------------------',product)
+    product= {k: v for k, v in product.dict().items() if v is not None}
+    
+    
+    if len(product) >= 1:
+        
+        update_result = await request.app.mongodb['ArtistCategory'].update_one(
+            {"_id": id}, {"$set": product}
+        )
+        
+
+        if update_result.modified_count == 1:
+            if (
+                updated_product := await request.app.mongodb['ArtistCategory'].find_one({"_id": id})
+            ) is not None:
+                return updated_product
+
+    if (
+        existing_product := await request.app.mongodb['ArtistCategory'].find_one({"_id": id})
+    ) is not None:
+        return existing_product
+
+    raise HTTPException(status_code=404, detail=f"Category with id {id} not found")
+

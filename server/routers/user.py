@@ -5,7 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from typing import Union,List
 from datetime import datetime,timedelta
 from jose import JWTError, jwt
-from ..schemas import CreateUser,ShowUser, ShowUserType, ShowUserDetailsAdmin,ShowUserWithId,TokenData, Token,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserDetails,ShowUserWithDetails
+from ..schemas import CreateUser,ShowUser, ShowUserDetailsAdmin,ShowUserWithId,TokenData,EditUserAdditionalDetails,GetAdditionalDetails,ShowUserWithDetails, ForgetPassword, ChangePassword, ConfirmToken
 from ..password_methods import get_password_hash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import random
@@ -109,12 +109,6 @@ async def verify_user(request: Request, id: str,token:int):
             
     
     raise  HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized",)
-
-
-
-
-
-
 
 
 def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None):
@@ -509,3 +503,74 @@ async def get_following(request: Request,current_user: ShowUserWithId = Depends(
 
     
     return followings
+
+
+@router.put('/forget-password')
+async def forget_password(request: Request, forget: ForgetPassword,background_tasks: BackgroundTasks):
+    created_at= datetime.now()
+    forget=jsonable_encoder(forget)
+   #user.pop('created_at')
+    username_check= await request.app.mongodb['Users'].find_one({"email":forget['email']})
+    print(username_check)
+    if username_check is None:
+        raise  HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email not found",
+        )
+    validation_number= randomDigits(5)
+    await request.app.mongodb['Users'].update_one({'email': forget['email']}, {'$push':{'forget_password_token':{'number':validation_number, 'created_at': created_at }}})
+    #background_tasks.add_task(send_email,email=user['email'],message=f'Your Confirmation code is {validation_number} .')
+
+    return {'email': forget['email']}
+
+@router.put('/confirm-code')
+async def confirm_code(request: Request, change: ConfirmToken,background_tasks: BackgroundTasks):
+    change= jsonable_encoder(change)
+    user= await request.app.mongodb['Users'].find_one({"email":change['email']})
+    if user is None or user['verified']==False:
+        raise  HTTPException( status_code=status.HTTP_404_NOT_FOUND, detail="User not found. ",)
+    for codes in user['forget_password_token']:
+        #created_date= datetime.strptime(codes['created_at'], "%Y-%m-%dT%H:%M:%S.%f")
+        difference= datetime.now()- codes['created_at']
+        difference_in_hour= difference.total_seconds() /3600
+        
+        if codes['number']== change['number']:
+            if difference_in_hour<2:
+                #r= await request.app.mongodb['Users'].update_one({'email': change['email']},{'$set':{'password': change['password']}})
+                print('zz')
+                return {"token": change["number"], "email": change["email"]}
+                
+            else:
+                raise  HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="Expired code",)
+            
+    
+    raise  HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized",)
+
+
+
+@router.put('/change-password')
+async def change_password(request: Request, change: ChangePassword, background_tasks: BackgroundTasks):
+    change.password= get_password_hash(change.password)
+    change= jsonable_encoder(change)
+    user= await request.app.mongodb['Users'].find_one({"email":change['email']})
+    if user is None or user['verified']==False:
+        raise  HTTPException( status_code=status.HTTP_404_NOT_FOUND, detail="User not found. ",)
+    for codes in user['forget_password_token']:
+        #created_date= datetime.strptime(codes['created_at'], "%Y-%m-%dT%H:%M:%S.%f")
+        difference= datetime.now()- codes['created_at']
+        difference_in_hour= difference.total_seconds() /3600
+        
+        if codes['number']== change['number']:
+            if difference_in_hour<2:
+                r= await request.app.mongodb['Users'].update_one({'email': change['email']},{'$set':{'password': change['password']}})
+            
+                return {"success": True}
+                
+            else:
+                raise  HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="Expired code",)
+            
+    
+    raise  HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized",)
+
+
+

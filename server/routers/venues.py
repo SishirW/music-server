@@ -3,7 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response
 
 from server.routers.user import validate_venue
-from ..schemas import CreateVenue, ShowUserWithId, CreateFeatured,ShowVenue, ShowVenueAdmin,Package,EditVenue,Schedule,VenueRating, ShowUser, GetVenueRating,ShowVenueCategory,CreateVenueCategory
+from ..schemas import CreateVenue, ShowUserWithId, EditCategory,CreateFeatured,ShowVenue, ShowVenueAdmin,Package,EditVenue,Schedule,VenueRating, ShowUser, GetVenueRating,ShowVenueCategory,CreateVenueCategory
 from typing import List, Dict
 from uuid import uuid4
 import shutil
@@ -19,7 +19,7 @@ router= APIRouter(prefix= "/venues",tags=["Venues"])
 
 
 @router.post('/')
-async def create_venue(request: Request, venue: CreateVenue,current_user: ShowUserWithId = Depends(get_current_user)):
+async def create_venue(request: Request, venue: CreateVenue,background_tasks: BackgroundTasks,current_user: ShowUserWithId = Depends(get_current_user)):
     venue.id= uuid4()
     venue= jsonable_encoder(venue)
     # venue_check=await request.app.mongodb['Venues'].find_one({'owner_id':current_user['_id']})
@@ -29,11 +29,16 @@ async def create_venue(request: Request, venue: CreateVenue,current_user: ShowUs
     await request.app.mongodb['Users'].update_one({'_id': current_user['_id']}, {'$set':{'type': 'venue'}})
 
     print('-------------------------',new_venue.inserted_id)
-    await request.app.mongodb['Venues'].update_one({'_id': new_venue.inserted_id}, {'$set':{'owner_id':current_user['_id'], "validate":True,'avg_rating': 0.0,'no_of_rating':0,'rating':[],'packages': [] }})
+    await request.app.mongodb['Venues'].update_one({'_id': new_venue.inserted_id}, {'$set':{'owner_id':current_user['_id'], "validate":False,'avg_rating': 0.0,'no_of_rating':0,'rating':[],'packages': [] }})
+    background_tasks.add_task(send_venue_created_notification,request=request)
     return {"success": True, "id":new_venue.inserted_id}
 
-
-
+async def send_venue_created_notification(request):
+    admin= await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000) 
+    devices=[]
+    for users in admin:
+        devices.extend(users['devices'])
+    send_notification(tokens=devices,detail={},type='venue-request',title='Venue Request',body='New venue request')
 
 @router.post('/featured')
 async def make_featured_venue(request: Request,background_tasks: BackgroundTasks, venue: CreateFeatured,current_user: ShowUserWithId = Depends(validate_admin)):
@@ -474,13 +479,25 @@ async def rate_venue(request: Request, rating: VenueRating,current_user: ShowUse
     r=await request.app.mongodb['Venues'].update_one({'_id': pid}, {'$set':{'avg_rating': avg,'no_of_rating':count}})
     return {'success':True}
 
-@router.put('/validate-venue',response_description='Update Venue Schedule')
+@router.put('/validate-venue',response_description='Validate Venue')
 async def validate_venue(request: Request, id:str,current_user: ShowUser = Depends(validate_admin)):
     r=await request.app.mongodb['Venues'].update_one({'_id': id}, {'$set':{'validate': True}})
     print (r.modified_count)
     if r.modified_count==0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cannot validate venue")
-    return {'sucess':True}
+    return {'success':True}
+
+@router.put('/decline-venue',response_description='Decline Venue')
+async def decline_venue(request: Request, id:str,current_user: ShowUser = Depends(validate_admin)):
+    r=await request.app.mongodb['Venues'].find_one({'_id': id})
+    if r==None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found") 
+    venue_user= r['owner_id']
+    r=await request.app.mongodb['Venues'].delete_one({'_id': id})
+    if r.deleted_count==1:
+        await request.app.mongodb['Users'].update_one({'_id': venue_user}, {'$set':{'type':'user'}})
+        return {f"Venue has been declined"}
+     
 
 
 
@@ -549,7 +566,7 @@ async def book_package(request: Request,vid: str, pid:str,package_name:str ,back
 
         background_tasks.add_task(send_notification,tokens=devices, detail={'venue_id':vid,'venue_name':venue['name']},type='package-booking',title='Package Booking',body='{} has booked package {}'.format(current_user['full_name'], package_name))
 
-        return {'success':True}
+        return {'venue':venue_to_send['name'], 'package':package_name,'amount':payment_details['amount_paid_in_rs'], 'paymentId':payment_details['idx']}
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No transaction found")
 
 @router.put('/test-package',response_description='Book Venue package')
@@ -581,7 +598,7 @@ async def complete_booked_package(request: Request, pid:str ,bid:str,current_use
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="venue not found")
     return {'success':True}
 
-@router.get('/category/',response_description='Get all venues categories', response_model=List[ShowVenueCategory])
+@router.get('/category/',response_description='Get all venues categories')
 async def get_venue_categories(request: Request):
     categories=await request.app.mongodb['VenueCategory'].find().to_list(10000)
     #print(categories)
@@ -595,11 +612,39 @@ async def create_venue_category(request: Request,category: CreateVenueCategory,c
     new_category= await request.app.mongodb['VenueCategory'].insert_one(category)
     return {"success": True}
 
-@router.delete('/category/{name}', status_code=status.HTTP_204_NO_CONTENT)
-async def delete_venue_category(name: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
-    delete_venue= await request.app.mongodb['VenueCategory'].delete_one({'category': name})
+@router.delete('/category/', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_venue_category(id:str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
+    delete_venue= await request.app.mongodb['VenueCategory'].delete_one({'_id': id})
     if delete_venue.deleted_count==1:
-        return {f"Successfully deleted venue with name {name}"}
+        return {f"Successfully deleted venue with id {id}"}
     else:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Venue with name {name} not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Venue with id {id} not found")
+
+
+
+@router.put('/category/', response_description='Update Product')
+async def edit_category(id: str, request: Request,product: EditCategory,current_user: ShowUserWithId = Depends(validate_admin)):
+    #print('-----------------------------------------',product)
+    product= {k: v for k, v in product.dict().items() if v is not None}
+    
+    
+    if len(product) >= 1:
+        
+        update_result = await request.app.mongodb['VenueCategory'].update_one(
+            {"_id": id}, {"$set": product}
+        )
+        
+
+        if update_result.modified_count == 1:
+            if (
+                updated_product := await request.app.mongodb['VenueCategory'].find_one({"_id": id})
+            ) is not None:
+                return updated_product
+
+    if (
+        existing_product := await request.app.mongodb['VenueCategory'].find_one({"_id": id})
+    ) is not None:
+        return existing_product
+
+    raise HTTPException(status_code=404, detail=f"Category with id {id} not found")
 

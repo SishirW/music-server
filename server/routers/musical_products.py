@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends, Response, UploadFile, Req
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import List, Optional,Set, Union 
-from ..schemas import GetProductRating, CreateProduct,ProductQuestion ,CreateProductCategory, EditProduct, OptionalProduct, ProductRating, ShowProduct, ShowProductAdmin, ShowProductCategory, ShowUser, ShowUserWithId
+from ..schemas import GetProductRating, CreateProduct,ProductQuestion,EditCategory ,CreateProductCategory, EditProduct, OptionalProduct, ProductRating, ShowProduct, ShowProductAdmin, ShowProductCategory, ShowUser, ShowUserWithId
 from .user import get_current_user, validate_seller,validate_admin
 import shutil
 from uuid import uuid1, uuid4
@@ -22,7 +22,7 @@ async def create_product(request: Request,product: CreateProduct,current_user: S
     product= jsonable_encoder(product)
     new_product= await request.app.mongodb['Products'].insert_one(product)
     #await request.app.mongodb['Products'].update(  {  $set : {"address":1} }  )
-    await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$set':{'images': [], 'avg_rating': 0.0,'no_of_rating':0 ,'rating':[],'questions':[]}})
+    await request.app.mongodb['Products'].update_one({'_id': new_product.inserted_id}, {'$set':{ 'avg_rating': 0.0,'no_of_rating':0 ,'rating':[],'questions':[]}})
     # for file in files:
     #     image_name= uuid4()
     #     with open(f"media/products/{image_name}.png", "wb") as buffer:
@@ -234,17 +234,16 @@ async def edit_product(id: str, request: Request,product: EditProduct,current_us
 
     raise HTTPException(status_code=404, detail=f"Product with id {id} not found")
 
-@router.put('/images/{id}',response_description='Update Product image')
-async def add_product_images(request: Request, id: str, files: List[UploadFile]):
+@router.put('/images/',response_description='Update Product image')
+async def add_product_images(request: Request, files: List[UploadFile], current_user: ShowUserWithId = Depends(validate_admin)):
+    names=[]
     if files is not None: 
         for file in files:
                 image_name= uuid4()
                 with open(f"media/products/{image_name}.png", "wb") as buffer:
                     shutil.copyfileobj(file.file, buffer)
-                update_result=await request.app.mongodb['Products'].update_one({'_id': id}, {'$push':{'images': f'{image_name}.png'}})
-                if update_result.matched_count==0: 
-                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Product with id {id} not found')
-        return {"Successfully added new images"}
+                names.append(f"{image_name}.png")
+        return {"success":True, "images":names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No image was added')
 
 @router.put('/rate',response_description='Rate Product')
@@ -309,7 +308,7 @@ async def delete_image(id: str, request: Request,images: List[str],current_user:
 
 # Product Category
 
-@router.get('/category/',response_description='Get all product categories', response_model=List[ShowProductCategory])
+@router.get('/category/',response_description='Get all product categories')
 async def get_product_categories(request: Request):
     categories=await request.app.mongodb['ProductCategory'].find().to_list(1000)
     #print(categories)
@@ -323,13 +322,39 @@ async def create_product_category(request: Request,category: CreateProductCatego
     new_category= await request.app.mongodb['ProductCategory'].insert_one(category)
     return {"success": True}
 
-@router.delete('/category/{name}', status_code=status.HTTP_204_NO_CONTENT)
-async def delete_product_category(name: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
-    delete_product= await request.app.mongodb['ProductCategory'].delete_one({'category': name})
+@router.delete('/category/', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_category(id: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):
+    delete_product= await request.app.mongodb['ProductCategory'].delete_one({'_id': id})
     if delete_product.deleted_count==1:
-        return {f"Successfully deleted product with name {name}"}
+        return {f"Successfully deleted product with id {id}"}
     else:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with name {name} not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with id {id} not found")
 
 
-#Product Card
+
+@router.put('/category/', response_description='Update Product')
+async def edit_category(id: str, request: Request,product: EditCategory,current_user: ShowUserWithId = Depends(validate_admin)):
+    #print('-----------------------------------------',product)
+    product= {k: v for k, v in product.dict().items() if v is not None}
+    
+    
+    if len(product) >= 1:
+        
+        update_result = await request.app.mongodb['ProductCategory'].update_one(
+            {"_id": id}, {"$set": product}
+        )
+        
+
+        if update_result.modified_count == 1:
+            if (
+                updated_product := await request.app.mongodb['ProductCategory'].find_one({"_id": id})
+            ) is not None:
+                return updated_product
+
+    if (
+        existing_product := await request.app.mongodb['ProductCategory'].find_one({"_id": id})
+    ) is not None:
+        return existing_product
+
+    raise HTTPException(status_code=404, detail=f"Category with id {id} not found")
+

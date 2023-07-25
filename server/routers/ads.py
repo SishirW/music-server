@@ -19,9 +19,17 @@ async def add_ads(request: Request,ads: AddAdvertisment,current_user: ShowUserWi
     return {"success": True, "id":new_ads.inserted_id}
 
 @router.get('/')
-async def get_advertisment(request: Request):
-    grow= await request.app.mongodb['Advertisment'].find().to_list(10000000)
-    return grow
+async def get_advertisment(request: Request, type:int=0):
+    if type == 0:
+        grow= await request.app.mongodb['Advertisment'].find().to_list(10000000)
+        print(grow)
+        return grow
+    if type == 1:
+        grow= await request.app.mongodb['Advertisment'].find({"is_startup":False}).to_list(10000000)
+        return grow
+    if type == 2:
+        grow= await request.app.mongodb['Advertisment'].find({"is_startup":True}).to_list(1)
+        return grow
 
 @router.delete('/', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ads(id: str, request: Request,current_user: ShowUserWithId = Depends(validate_admin)):

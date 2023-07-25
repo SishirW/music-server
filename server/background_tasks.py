@@ -6,10 +6,10 @@ import json
 
 
 def send_notification(tokens,detail,type,title,body):
-    print(detail)
+    print(tokens)
     cwd= os.getcwd()
     print(cwd)
-    cred = credentials.Certificate(f"{cwd}\server\music-5e4d7-firebase-adminsdk-owp1r-6e510201d4.json")
+    cred = credentials.Certificate(f"{cwd}\server\music-6007d-firebase-adminsdk-89o6x-cae629bd02.json")
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
 
@@ -18,7 +18,7 @@ def send_notification(tokens,detail,type,title,body):
             title=title, 
             body=body
             ),
-        tokens= tokens,
+        tokens= ['czXE_E6-TgqEB6q1vjhQb3:APA91bEBYGbA2Ic56zaBeL2IxAcGAu4BemqpfFIwCg9G1jcIFQfA2_R9KZyvRrWXgI23vsZQlflZEzfJgMzvdZexKZaVo_LkTBpe_RplYLXH4Jxb6XBUt2S6MUSdXP7TeidRuchc4R9p'],
          data= {
              "click_action": "FLUTTER_NOTIFICATION_CLICK",
               "sound": "default",

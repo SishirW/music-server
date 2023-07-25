@@ -33,6 +33,7 @@ class CreateProduct(BaseModel):
     description: str= Field(...)
     category: str= Field(...)
     points: int=Field(...)
+    images: List=Field(...)
     #avg_rating: Optional[float]=0.0
     
 
@@ -74,9 +75,13 @@ class EditProduct(BaseModel):
     name: Optional[str]
     price: Optional[float]
     description: Optional[str]
-    points: Optional[str]
+    points: Optional[int]
+    images: Optional[List]
     #new_image: Optional[str]
     #images_to_delete:Optional[List[str]]
+
+class EditCategory(BaseModel):
+    category: str= Field(...)
 
 class OrderNumber(BaseModel):
     id: str
@@ -168,6 +173,14 @@ class CreateUser(BaseModel):
     orders: Optional[List]=[]
     following: Optional[List]=[]
     #created_at: datetime.datetime = datetime.datetime.now()
+
+class ForgetPassword(BaseModel):
+    email: EmailStr= Field(...)
+
+class ConfirmToken(ForgetPassword):
+    number: int= Field(...)
+class ChangePassword(ConfirmToken):
+    password: str= Field(...)
     
 
 
@@ -348,16 +361,16 @@ class ShowArtistEdited(BaseModel):
     location: str
     description: str
     images: Optional[List]=[]
-    skills: List
-    looking_for: Optional[List]=[]
+    skills: str
+    looking_for: Optional[str]=[]
 
 class EditArtist(BaseModel):
     name: Optional[str]
     location: Optional[str]
     description: Optional[str]
     images: Optional[List]
-    skills: Optional[List]
-    looking_for: Optional[List]
+    skills: Optional[str]
+    looking_for: Optional[str]
     category: Optional[str]
     video: Optional[str]
     social: Optional[Dict]
@@ -491,4 +504,5 @@ class AddAdvertisment(BaseModel):
     image: str=Field(...)
     url: str=Field(...)
     starting_image: Optional[str]=''
+    is_startup: bool=False
 

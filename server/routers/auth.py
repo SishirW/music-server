@@ -26,7 +26,7 @@ async def login_for_access_token(request :Request,background_tasks: BackgroundTa
     validation_number= randomDigits(5)
     created_at= datetime.now()
     if user['verified']==False:
-        await request.app.mongodb['Users'].update_one({'username': form_data.username}, {'$push':{'validation_token':{'number':validation_number, 'created_at': str(created_at)}}})
+        await request.app.mongodb['Users'].update_one({'username': form_data.username}, {'$push':{'validation_token':{'number':validation_number, 'created_at': created_at}}})
         background_tasks.add_task(send_email,email=user['email'],message=f'Your Confirmation code is {validation_number} .')
 
         raise HTTPException(
