@@ -1,4 +1,4 @@
-from . import BaseModel, PydanticBaseModel
+from . import BaseModel, PydanticBaseModel, PyObjectId, Image, Review, Video
 from typing import List, Optional, EmailStr, Field
 from .bands import Location
 from datetime import datetime
@@ -6,24 +6,13 @@ from datetime import datetime
 class Category(BaseModel):
     category: str
 
-class Schedule(BaseModel):
-    id: str = Field(alias='_id')
+class VenueSchedule(BaseModel):
     title: str = Field(...)
     start_time: str = Field(...)
     end_time: Optional[str] = ''
+    venue: PyObjectId= Field(...)   # User.id
+    artist: PyObjectId= Field(...)  # User.id
 
-class VenueSocialMedia(BaseModel):
-    facebook: Optional[str]
-    instagram: Optional[str]
-    tiktok: Optional[str]
-    youtube: Optional[str]
-    twitter: Optional[str]
-
-class Rating(BaseModel):
-    venue_id: str
-    user_id: str
-    rating: float
-    comment: str
 
 class PaymentDetails(BaseModel):
     token: str
@@ -32,9 +21,11 @@ class PaymentDetails(BaseModel):
     amount_paid: int
     amount_paid_in_rs: int
 
+
 class PackageBooking(BaseModel):
-    package_id: str
-    user_id: str
+    package_id: PyObjectId= Field(...)
+    user_id: PyObjectId= Field(...)
+    venue_id: PyObjectId= Field(...)
     # name: str
     # email: str
     phone: str
@@ -44,29 +35,27 @@ class PackageBooking(BaseModel):
 
 
 class Package(BaseModel):
-    venue_id: str
+    venue_id: PyObjectId= Field(...)
     name: str = Field(...)
     price: int = Field(...)
-    time: str = Field(...)
-    date: str = Field(...)
+    time: datetime.time
+    date: datetime.date
     valid: Optional[bool] = True
-    bookings: Optional[List] = []
     description: str = Field(...)
     points: int = 0
 
+
+
 class Venue(BaseModel):
-    name: str = Field(...)
-    location: str = Field(...)
+    name: str = Field(...)   # separate name or user name ???
+    #location: str = Field(...)
     description: str = Field(...)
-    images: Optional[List] = []
-    todays_schedule: Optional[List[Schedule]] = []
-    menu: Optional[List] = [] 
-    video: Optional[str] = ''
-    social: VenueSocialMedia
-    category: str 
-    #avg_rating: int
-    #no_of_rating: int
-    owner_id: str
+    #menu: Optional[List] = []  # How to define in Image class ??? 
+    #video: Optional[str] = ''
+    category: PyObjectId = Field(...) 
+    is_featured: bool
+    is_verified: bool
+    owner_id: PyObjectId= Field(...)
     
 def create_venue():
     pass

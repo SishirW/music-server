@@ -33,3 +33,20 @@ class BaseModel(PydanticBaseModel):
     def number_validator(cls, values):
         values["updated_at"] = datetime.now()
         return values
+
+
+class Image(BaseModel):
+    user: PyObjectId= Field(...)
+    image: str= Field(...)
+    type: str= Field(...)
+
+class Video(BaseModel):
+    user: PyObjectId= Field(...)
+    url: str
+
+class Review(BaseModel):
+    reviewer: PyObjectId= Field(...)
+    reviewee: PyObjectId= Field(...)
+    type: str
+    rating: float
+    comment: str

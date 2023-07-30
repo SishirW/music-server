@@ -1,4 +1,4 @@
-from . import BaseModel, PydanticBaseModel
+from . import BaseModel, PydanticBaseModel, PyObjectId
 from typing import List, Optional, EmailStr, Field
 from .bands import Location
 from datetime import datetime
@@ -7,6 +7,15 @@ class ValidationToken(PydanticBaseModel):
     number: int
     created_at: datetime
 
+class UserType(BaseModel):
+    typeName: str
+
+class SocialMedia(BaseModel):
+    facebook: Optional[str]
+    instagram: Optional[str]
+    tiktok: Optional[str]
+    youtube: Optional[str]
+    twitter: Optional[str]
 
 
 class User(BaseModel):
@@ -15,13 +24,14 @@ class User(BaseModel):
     email: EmailStr = Field(...)
     password: str = Field(...)
     verified: bool = True
-    type: Optional[str] = "user"
+    type: PyObjectId = Field(default_factory="user")
     #cart: List = []     # QN
-    location: Optional[Location] = ''
+    location: Optional[Location] = ''   #TODO
     phone_no: Optional[str] = ''
     devices: List[str]
     points: int
     validation_token: List[ValidationToken]
+    social_links: SocialMedia
     #orders: Optional[List] = []   # QN (Require Order class ?)
     #following: Optional[List] = [] # QN
 
@@ -33,9 +43,9 @@ class User(BaseModel):
 #     quantity: str
 
 
-class UserFollowing(BaseModel):
-    user_id: str
-    artist_id: str
+# class UserFollowing(BaseModel):
+#     user_id: str
+#     artist_id: str
 
 def create_user():
     pass
