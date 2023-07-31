@@ -1,0 +1,19 @@
+version: '3.3'
+
+services:
+  mongo:
+    image: mongo
+    restart: always
+    volumes:
+      - ./data:/data/db
+    ports:
+      - 27017:27017
+
+  mongoexpress:
+    image: mongo-express
+    ports:
+      - "8081:8081"
+    links:
+      - mongo
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://mongo:27017

@@ -5,31 +5,32 @@ import os
 import json
 
 
-def send_notification(tokens,detail,type,title,body):
+def send_notification(tokens, detail, type, title, body):
     print(detail)
-    cwd= os.getcwd()
+    cwd = os.getcwd()
     print(cwd)
-    cred = credentials.Certificate(f"{cwd}\server\music-5e4d7-firebase-adminsdk-owp1r-6e510201d4.json")
+    cred = credentials.Certificate(
+        f"{cwd}\server\music-5e4d7-firebase-adminsdk-owp1r-6e510201d4.json")
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
 
     message = messaging.MulticastMessage(
-        notification= messaging.Notification(
-            title=title, 
+        notification=messaging.Notification(
+            title=title,
             body=body
-            ),
-        tokens= tokens,
-         data= {
-             "click_action": "FLUTTER_NOTIFICATION_CLICK",
-              "sound": "default",
-              "type":type,
-              "status": "done",
-              "body": json.dumps(detail),
-            }
-         )
-    response=messaging.send_multicast(message)
+        ),
+        tokens=tokens,
+        data={
+            "click_action": "FLUTTER_NOTIFICATION_CLICK",
+            "sound": "default",
+            "type": type,
+            "status": "done",
+            "body": json.dumps(detail),
+        }
+    )
+    response = messaging.send_multicast(message)
     print(response.success_count)
-    
+
     return response
 
 # def send_notification():
@@ -51,4 +52,3 @@ def send_notification(tokens,detail,type,title,body):
 #     url = "https://fcm.googleapis.com/fcm/send"
 #     response = requests.request("POST", url, headers=headers, data=detail)
 #     print(response.json())
-

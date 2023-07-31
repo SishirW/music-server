@@ -15,7 +15,7 @@
 # async def create_package(request: Request, package: Package,current_user: ShowUser = Depends(validate_venue)):
 #     package.id= uuid4()
 #     venue= await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
-    
+
 #     if venue is None:
 #         raise HTTPException(status_code=404, detail=f"Venue not found")
 #     package.venue_id=venue['_id']
@@ -26,7 +26,7 @@
 # @router.get('/',response_description='Create Venue Bookings')
 # async def get_packages(request: Request,current_user: ShowUser = Depends(validate_venue)):
 #     venue= await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
-    
+
 #     packages=await request.app.mongodb['Packages'].find({"venue_id":venue['_id']}).to_list(1000)
 #     return packages
 
@@ -35,13 +35,13 @@
 #     #print('-----------------------------------------',product)
 #     package= {k: v for k, v in package.dict().items() if v is not None}
 #     venue=await request.app.mongodb['Venues'].find_one({"owner_id":current_user['_id']})
-    
+
 #     if len(package) >= 1:
-        
+
 #         update_result = await request.app.mongodb['Packages'].update_one(
 #             {"_id": id, 'venue_id': venue['_id']}, {"$set": package}
 #         )
-        
+
 
 #         if update_result.modified_count == 1:
 #             if (
