@@ -8,10 +8,3 @@ class EditUserSchema(BaseModel):
 
 class CreateUserSchema(EditUserSchema):
     password: str = Field(...)
-    # verified: bool = False
-    # type: str= "user"
-    # location: Optional[str] = ''   #TODO
-    # phone_no: Optional[str] = ''
-    # devices: List[str]= []
-    # points: int=0
-    # social_links: SocialMedia

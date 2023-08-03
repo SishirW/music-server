@@ -11,7 +11,7 @@ from ..password_methods import get_password_hash
 
 collection_name = "Users"
 
-class ValidationToken(PydanticBaseModel):
+class ValidationToken(BaseModel):
     number: int
     created_at: datetime
 
@@ -37,7 +37,7 @@ class User(BaseModel):
     password: str = Field(...)
     verified: bool = False
     type: str= 'user'
-    location: Optional[str] = ''   #TODO
+    location: Optional[str] = ''
     phone_no: Optional[str] = ''
     devices: List[str]= []
     points: int =0
