@@ -3,7 +3,6 @@ from typing import List, Optional
 from pydantic import EmailStr, Field
 from .bands import Location
 from datetime import datetime
-from server.schemas_new.user import CreateUserSchema, EditUserSchema
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException,status
 from ..password_methods import get_password_hash
@@ -44,7 +43,7 @@ class User(BaseModel):
     social_links: Optional[SocialMedia]
 
 
-async def create_user(db, user: CreateUserSchema):
+async def create_user(db, user):
     old_user= await db[collection_name].find_one({"email": user.email})
     if old_user is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,

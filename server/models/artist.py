@@ -47,7 +47,6 @@ async def add_artist(db, artist, user):
         user_id= user,
     )
     encoded = jsonable_encoder(artist1)
-    print(encoded)
     await db[collection_name].insert_one(encoded)
     # new_user = await find_band_by_id(db, str(bnd.id), user)
     # return new_band
@@ -55,7 +54,6 @@ async def add_artist(db, artist, user):
 
 async def get_artist_by_userid(db, id):
     artist = await db[collection_name].find_one({"user_id": id})
-    print(artist)
     if artist is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"artist not found!")
@@ -63,7 +61,6 @@ async def get_artist_by_userid(db, id):
 
 async def get_artist_byid(db, id):
     artist = await db[collection_name].find_one({"_id": id})
-    print(artist)
     if artist is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"artist not found!")
@@ -74,7 +71,6 @@ async def get_relevant_artist(db,page):
     artists=[]
     async for a in artist:
         artists.append(a)
-    print(artist)
     return artists
 
 async def get_featured_artist(db,page):
@@ -83,7 +79,6 @@ async def get_featured_artist(db,page):
     artists=[]
     async for a in artist:
         artists.append(a)
-    print(artist)
     return artists
 
 async def add_images(db,artist_id, files):
@@ -95,6 +90,7 @@ async def add_images(db,artist_id, files):
             with open(f"media_new/artist/{artist_id}/{image_name}.png", "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             names.append(f"{image_name}.png")
+        db[collection_name].update_one({'_id': artist_id}, {'$push': {'images': {'$each':names}}})
         return {"success": True, "images": names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                         detail='No image was added')
