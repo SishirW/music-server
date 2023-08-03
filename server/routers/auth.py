@@ -13,7 +13,6 @@ router = APIRouter(tags=['Authentication'])
 @router.post("/token", response_model=Token)
 async def login_for_access_token(request: Request, background_tasks: BackgroundTasks, form_data: OAuth2PasswordRequestForm = Depends()):
     token = request.headers.get('device-token')
-    print(token)
     user = await request.app.mongodb['Users'].find_one({'username': form_data.username})
     if user is None:
         user = await request.app.mongodb['Users'].find_one({'email': form_data.username})
