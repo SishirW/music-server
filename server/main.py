@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from server.routers import musical_products, user, auth, venues, cart, orders, artist, packages, grow, used_products, repair, ads
-from server.routers_new import instruments, genres, bands, user as userv2
+from server.routers_new import instruments, genres, bands, user as userv2, artist
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from starlette.middleware.cors import CORSMiddleware
@@ -46,7 +46,7 @@ app.include_router(bands.router)
 app.include_router(instruments.router)
 app.include_router(genres.router)
 # # For Authentication
-# app.include_router(auth.router)
+app.include_router(auth.router)
 # # Users
 # app.include_router(user.router)
 # app.include_router(artist.router)
@@ -65,6 +65,7 @@ app.include_router(genres.router)
 # app.include_router(packages.router)
 
 app.include_router(userv2.router)
+app.include_router(artist.router)
 
 @app.get("/")
 async def root():
