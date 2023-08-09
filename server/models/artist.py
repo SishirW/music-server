@@ -1,4 +1,4 @@
-from . import BaseModel, PydanticBaseModel, PyObjectId, Image, Review
+from . import BaseModel
 from typing import List, Optional
 from pydantic import EmailStr, Field
 from .bands import Location
@@ -7,8 +7,10 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid
 import shutil,os
+from server.schemas_new.artist import CreateScheduleSchema, EditScheduleSchema
 
 collection_name= 'Artist'
+schedule_collection_name= ' ArtistSchedule'
 
 class Skill(BaseModel):
     skill: str
@@ -17,14 +19,15 @@ class Genre(BaseModel):
     genre: str
 
 class ArtistSchedule(BaseModel):
-    artist: PyObjectId= Field(...)
-    venue: PyObjectId= Field(...)
+    artist: str= Field(...)
+    venue: Optional[str]
+    description: str
     start_time: datetime
     end_time: datetime
 
 class ArtistFollow(BaseModel):
-    artist: PyObjectId= Field(...)
-    user: PyObjectId= Field(...)
+    artist: str= Field(...)
+    user: str= Field(...)
 
 class Artist(BaseModel):
     alias: str
@@ -94,3 +97,58 @@ async def add_images(db,artist_id, files):
         return {"success": True, "images": names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                         detail='No image was added')
+
+async def add_schedule(db,schedule: CreateScheduleSchema,user_id):
+    artist= await get_artist_by_userid(db, user_id)
+    sch= ArtistSchedule(
+        artist= artist['_id'],
+        venue= schedule.venue,
+        description= schedule.description,
+        start_time= schedule.start_time,
+        end_time= schedule.end_time
+    )
+    encoded = jsonable_encoder(sch)
+    await db[schedule_collection_name].insert_one(encoded)
+    return {'success': True}
+
+async def check_schedule_belongs_to_artist(db,schedule_id, user_id):
+    schedule= await db[schedule_collection_name].find_one({"_id": schedule_id})
+    if schedule is None:
+        raise HTTPException(status_code=404, detail=f"schedule not found")
+    artist=await get_artist_by_userid(db,user_id)
+    return schedule['artist']== artist['_id']
+
+
+async def edit_schedule(db,schedule_id,schedule: EditScheduleSchema, user):
+    schedule = {k: v for k, v in schedule.dict().items() if v is not None}
+    check= await check_schedule_belongs_to_artist(db, schedule_id, user)
+    if not check:
+        raise HTTPException(status_code=404, detail=f"schedule not found")
+    if len(schedule) >= 1:
+
+        update_result = await db[schedule_collection_name].update_one(
+            {"_id": schedule_id}, {"$set": schedule}
+        )
+
+        if update_result.modified_count == 1:
+            if (
+                updated_schedule := await db[schedule_collection_name].find_one({"_id": schedule_id})
+            ) is not None:
+                return updated_schedule
+
+    if (
+        existing_schedule := await db[schedule_collection_name].find_one({"_id": schedule_id})
+    ) is not None:
+        return existing_schedule
+
+    raise HTTPException(status_code=404, detail=f"schedule with id {schedule_id} not found")
+
+async def delete_schedule(db, schedule_id, user):
+    check= await check_schedule_belongs_to_artist(db, schedule_id, user)
+    if not check:
+        raise HTTPException(status_code=404, detail=f"Schedule not found")
+    schedule=await db[schedule_collection_name].delete_one({'_id': schedule_id})
+    if schedule.deleted_count == 1:
+        return {f"Successfully deleted schedule"}
+    else:
+        raise HTTPException(status_code=404, detail=f"schedule not found")
