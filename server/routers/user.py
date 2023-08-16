@@ -168,27 +168,6 @@ async def get_current_user(request: Request, token: str = Depends(oauth2_scheme)
     return user
 
 
-async def check_is_artist(request: Request, token: str = Depends(optional_oauth2_scheme)):
-    if token is None:
-        return {'type': 'not_logged_in', 'following': []}
-    # print('---------------------- ',token)
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            return {'type': 'not_logged_in'}
-        token_data = TokenData(username=username)
-    except JWTError:
-        return {'type': 'not_logged_in'}
-    user = await request.app.mongodb['Users'].find_one({'username': username})
-    if user is None:
-        return {'type': 'not_logged_in'}
-    return {'type': user['type'], 'id': user['_id'], 'following': user['following']}
 
 
 async def get_details(request: Request, token: str = Depends(oauth2_scheme)):
@@ -232,6 +211,28 @@ async def validate_seller(request: Request, token: str = Depends(oauth2_scheme))
     if user['type'] != "seller":
         raise credentials_exception
     return user
+
+async def check_is_artist(request: Request, token: str = Depends(optional_oauth2_scheme)):
+    if token is None:
+        return {'type': 'not_logged_in', 'following': []}
+    # print('---------------------- ',token)
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return {'type': 'not_logged_in'}
+        token_data = TokenData(username=username)
+    except JWTError:
+        return {'type': 'not_logged_in'}
+    user = await request.app.mongodb['Users'].find_one({'username': username})
+    if user is None:
+        return {'type': 'not_logged_in'}
+    return {'type': user['type'], 'id': user['_id'], 'following': user['following']}
 
 
 async def validate_artist(request: Request, token: str = Depends(oauth2_scheme)):
@@ -279,6 +280,26 @@ async def validate_venue(request: Request, token: str = Depends(oauth2_scheme)):
 
 
 async def validate_user(request: Request, token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not Authorized",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = await request.app.mongodb['Users'].find_one({'username': username})
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def validate_user_without_error(request: Request, token: str = Depends(optional_oauth2_scheme)):
+    if token is None:
+        return {'_id':None}
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not Authorized",
