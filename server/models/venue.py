@@ -89,20 +89,13 @@ async def get_venue_byid(db, id):
     return venue
 
 async def get_relevant_venue(db,page):
-    venue = db[collection_name].find().skip((page-1)*5).limit(5)
-    venues=[]
-    async for a in venue:
-        venues.append(a)
-    return venues
+    venue =await db[collection_name].find().skip((page-1)*5).limit(5).to_list(5)
+    return venue
 
 async def get_featured_venue(db,page):
-    venue = db[collection_name].find().sort(
-            [('featured', -1)]).skip((page-1)*5).limit(5)
-    venues=[]
-    async for a in venue:
-        venues.append(a)
-
-    return venues
+    venue =await db[collection_name].find().sort(
+            [('featured', -1)]).skip((page-1)*5).limit(5).to_list(5)
+    return venue
 
 async def add_images(db,venue_id, files):
     names = []

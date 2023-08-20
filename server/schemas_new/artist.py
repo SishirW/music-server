@@ -19,3 +19,6 @@ class EditScheduleSchema(BaseModel):
     description: Optional[str]
     start_time: Optional[datetime]
     end_time: Optional[datetime]
+
+class FollowArtistSchema(BaseModel):
+    artist: str= Field(...)

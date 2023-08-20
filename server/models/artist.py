@@ -7,10 +7,12 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid
 import shutil,os
-from server.schemas_new.artist import CreateScheduleSchema, EditScheduleSchema
+from server.schemas_new.artist import CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema
 
 collection_name= 'Artist'
-schedule_collection_name= ' ArtistSchedule'
+schedule_collection_name= 'ArtistSchedule'
+follow_collection_name= 'ArtistFollow'
+
 
 class Skill(BaseModel):
     skill: str
@@ -51,8 +53,6 @@ async def add_artist(db, artist, user):
     )
     encoded = jsonable_encoder(artist1)
     await db[collection_name].insert_one(encoded)
-    # new_user = await find_band_by_id(db, str(bnd.id), user)
-    # return new_band
     return {'success': True}
 
 async def get_artist_by_userid(db, id):
@@ -70,19 +70,14 @@ async def get_artist_byid(db, id):
     return artist
 
 async def get_relevant_artist(db,page):
-    artist = db[collection_name].find().skip((page-1)*5).limit(5)
-    artists=[]
-    async for a in artist:
-        artists.append(a)
-    return artists
+    artist =await db[collection_name].find().sort(
+            [('featured', -1), ('_id', 1)]).skip((page-1)*5).limit(5).to_list(5)
+    return artist
 
 async def get_featured_artist(db,page):
     artist = db[collection_name].find().sort(
-            [('featured', -1)]).skip((page-1)*5).limit(5)
-    artists=[]
-    async for a in artist:
-        artists.append(a)
-    return artists
+            [('featured', -1)]).skip((page-1)*5).limit(5).to_list(5)
+    return artist
 
 async def add_images(db,artist_id, files):
     names = []
@@ -152,3 +147,147 @@ async def delete_schedule(db, schedule_id, user):
         return {f"Successfully deleted schedule"}
     else:
         raise HTTPException(status_code=404, detail=f"schedule not found")
+
+async def follow_artist(db, user, follow: FollowArtistSchema):
+    artist= await get_artist_byid(db, follow.artist)
+    query= {"$and": [
+        {"artist": artist['user_id']},
+        {"user": user}
+    ]}
+    check_followed= await db[follow_collection_name].find_one(query)
+    if check_followed is not None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Already followed this artist")
+    follow= ArtistFollow(
+        artist= artist['user_id'],
+        user= user
+    )
+    encoded = jsonable_encoder(follow)
+    await db[follow_collection_name].insert_one(encoded)
+    return {'success': True}
+
+async def unfollow_artist(db, user, follow: FollowArtistSchema):
+    artist= await get_artist_byid(db, follow.artist)
+    query= {"$and": [
+        {"artist": follow.artist},
+        {"user": user}
+    ]}
+    check_followed= await db[follow_collection_name].delete_one(query)
+    if check_followed.deleted_count == 1:
+        return {f"Unfollowed"}
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not a follower")
+
+async def get_followers_count(db, artist):
+    await get_artist_byid(db, artist)
+    count= await db[follow_collection_name].count_documents({"artist": artist})
+    return count
+
+async def get_follower(db, artist_id,page,user_id):
+    artist=await get_artist_byid(db, artist_id)
+    artist_user_id= artist['user_id']
+    pipeline= [
+  {
+    "$match": {
+      "artist": artist_user_id
+    }
+  },
+  {
+    "$lookup": {
+      "from": "Artist",
+      "localField": "user",
+      "foreignField": "user_id",
+      "as": "artist_detail"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "ArtistFollow",
+      "localField": "user",
+      "foreignField": "artist",
+      "as": "artist_followers"
+    }
+  },
+  {
+    "$addFields": {
+      "isFollowedByUser": {
+        "$in": [
+          user_id,
+          "$artist_followers.user"
+        ]
+      }
+    }
+  },
+  {
+    "$project": {
+      "_id": 0,
+      "artist_detail": "$artist_detail",
+      "following": "$isFollowedByUser"
+    },
+    
+  },
+  {
+    "$skip": (page-1)*5
+  },
+  {
+    "$limit": 5
+  }
+
+]
+    followers= await db[follow_collection_name].aggregate(pipeline).to_list(5)
+    return followers
+
+
+
+async def get_following(db, artist_id,page,user_id):
+    artist=await get_artist_byid(db, artist_id)
+    artist_user_id= artist['user_id']
+    pipeline= [
+  {
+    "$match": {
+      "user": artist_user_id
+    }
+  },
+  {
+    "$lookup": {
+      "from": "Artist",
+      "localField": "artist",
+      "foreignField": "user_id",
+      "as": "artist_detail"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "ArtistFollow",
+      "localField": "artist",
+      "foreignField": "artist",
+      "as": "artist_followers"
+    }
+  },
+  {
+    "$addFields": {
+      "isFollowedByUser": {
+        "$in": [
+          user_id,
+          "$artist_followers.user"
+        ]
+      }
+    }
+  },
+  {
+    "$project": {
+      "_id": 0,
+      "artist_detail": "$artist_detail",
+      "following": "$isFollowedByUser"
+    }
+  },
+  {
+    "$skip": (page-1)*5
+  },
+  {
+    "$limit": 5
+  }
+]
+    following= await db[follow_collection_name].aggregate(pipeline).to_list(5)
+    return following
+
+

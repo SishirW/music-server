@@ -34,7 +34,7 @@ class User(BaseModel):
     username: str = Field(...)
     email: EmailStr = Field(...)
     password: str = Field(...)
-    verified: bool = False
+    verified: bool = True
     type: str= 'user'
     location: Optional[str] = ''
     phone_no: Optional[str] = ''
