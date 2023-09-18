@@ -28,9 +28,9 @@ async def follow_artists(request: Request, follow: FollowArtistSchema, current_u
     return jsonable_encoder(result)
 
 @router.get('/')
-async def get_relevant_artists(request: Request, page: int = 1):
+async def get_relevant_artists(request: Request, page: int = 1, genre: str = None, search: str = None, searchtype: int = 0, current_user: ShowUserWithId = Depends(validate_user_without_error)):
     db = get_database(request)
-    result = await get_relevant_artist(db,page)
+    result = await get_relevant_artist(db,page, genre, search, searchtype,current_user['_id'])
     return jsonable_encoder(result)
 
 

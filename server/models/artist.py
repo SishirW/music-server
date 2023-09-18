@@ -69,9 +69,16 @@ async def get_artist_byid(db, id):
                             detail=f"artist not found!")
     return artist
 
-async def get_relevant_artist(db,page):
-    artist =await db[collection_name].find().sort(
-            [('featured', -1), ('_id', 1)]).skip((page-1)*5).limit(5).to_list(5)
+async def get_relevant_artist(db,page,genre, search, searchtype,user_id):
+    if search != None:
+        pipeline= get_search_pipeline(search, user_id, page, searchtype)  # 0 for search by name. 1 for search by instrument
+        artist =await db[collection_name].aggregate(pipeline).to_list(5)
+    elif genre != None:
+        pipeline= get_genre_pipeline(search, user_id, page, searchtype)  # 0 for search by name. 1 for search by instrument
+        artist =await db[collection_name].aggregate(pipeline).to_list(5)
+    else:
+      pipeline= get_pipeline(user_id, page)
+      artist =await db[collection_name].aggregate(pipeline).to_list(5)
     return artist
 
 async def get_featured_artist(db,page):
@@ -177,9 +184,38 @@ async def unfollow_artist(db, user, follow: FollowArtistSchema):
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not a follower")
 
-async def get_followers_count(db, artist):
-    await get_artist_byid(db, artist)
-    count= await db[follow_collection_name].count_documents({"artist": artist})
+async def get_followers_count(db, artist_id):
+    artist=await get_artist_byid(db, artist_id)
+    artist_user_id= artist['user_id']
+    pipeline= [
+  {
+    "$match": {
+      "_id": artist_id
+    }
+  },
+  {
+    "$lookup": {
+      "from": "ArtistFollow",
+      "localField": "user_id",
+      "foreignField": "artist",
+      "as": "artist_followers"
+    }
+  },
+  {
+    "$addFields": {
+      "followers_count": {
+        "$size": "$artist_followers"
+      }
+    }
+  },
+  {
+    "$project": {
+      "_id": 0,
+      "followers_count": 1
+    }
+  }
+]
+    count= await db[collection_name].aggregate(pipeline).to_list(5)
     return count
 
 async def get_follower(db, artist_id,page,user_id):
@@ -291,3 +327,178 @@ async def get_following(db, artist_id,page,user_id):
     return following
 
 
+def get_pipeline(user_id, page):
+    return [
+  {
+    "$lookup": {
+      "from": "ArtistFollow",
+      "localField": "user_id",
+      "foreignField": "artist",
+      "as": "artist_followers"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "ArtistFollow",
+      "localField": "user_id",
+      "foreignField": "user",
+      "as": "artist_following"
+    }
+  },
+  {
+    "$addFields": {
+      "isFollowedByUser": {
+        "$in": [
+          user_id,
+          "$artist_followers.user"
+        ]
+      },
+      "followers_count": {
+        "$size": "$artist_followers"
+      },
+      "following_count": {
+        "$size": "$artist_following"
+      }
+    }
+  },
+  {
+    "$unset": ["artist_followers", "artist_following"]
+  },
+  {
+      "$sort":{
+          "is_featured":-1,
+          "_id":1,
+      }
+  },
+  {
+    "$skip": (page-1)*5
+  },
+  {
+    "$limit": 5
+  }
+]
+
+def get_search_pipeline(keyword,user_id, page, type):
+    pipeline_term= "alias"
+    if type==1:
+        pipeline_term= "skills"
+    
+    return [
+      {
+  "$match": {
+    pipeline_term: {
+      "$regex": f".*{keyword}.*",
+      "$options": "i"
+    }
+  }
+  },
+  {
+  "$lookup": {
+    "from": "ArtistFollow",
+    "localField": "user_id",
+    "foreignField": "artist",
+    "as": "artist_followers"
+  }
+  },
+  {
+  "$lookup": {
+    "from": "ArtistFollow",
+    "localField": "user_id",
+    "foreignField": "user",
+    "as": "artist_following"
+  }
+  },
+  {
+  "$addFields": {
+    "isFollowedByUser": {
+      "$in": [
+        user_id,
+        "$artist_followers.user"
+      ]
+    },
+    "followers_count": {
+      "$size": "$artist_followers"
+    },
+    "following_count": {
+      "$size": "$artist_following"
+    }
+  }
+  },
+  {
+  "$unset": ["artist_followers", "artist_following"]
+  },
+  {
+    "$sort":{
+        "is_featured":-1,
+        "_id":1,
+    }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
+  
+  
+
+def get_genre_pipeline(genre,user_id, page, type):
+    return [
+      {
+  "$match": {
+    "genre": {
+      "$in":[genre],
+      "$options": "i"
+    }
+  }
+  },
+  {
+  "$lookup": {
+    "from": "ArtistFollow",
+    "localField": "user_id",
+    "foreignField": "artist",
+    "as": "artist_followers"
+  }
+  },
+  {
+  "$lookup": {
+    "from": "ArtistFollow",
+    "localField": "user_id",
+    "foreignField": "user",
+    "as": "artist_following"
+  }
+  },
+  {
+  "$addFields": {
+    "isFollowedByUser": {
+      "$in": [
+        user_id,
+        "$artist_followers.user"
+      ]
+    },
+    "followers_count": {
+      "$size": "$artist_followers"
+    },
+    "following_count": {
+      "$size": "$artist_following"
+    }
+  }
+  },
+  {
+  "$unset": ["artist_followers", "artist_following"]
+  },
+  {
+    "$sort":{
+        "is_featured":-1,
+        "_id":1,
+    }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
+    

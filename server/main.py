@@ -47,26 +47,26 @@ app.include_router(instruments.router)
 app.include_router(genres.router)
 # # For Authentication
 app.include_router(auth.router)
-# # Users
-# app.include_router(user.router)
-# app.include_router(artist.router)
-# # Products and Repairs
-# app.include_router(used_products.router)
-# app.include_router(musical_products.router)
-# app.include_router(venues.router)
-# app.include_router(repair.router)
-# # Orders
-# app.include_router(cart.router)
-# app.include_router(orders.router)
-# app.include_router(grow.router)
-# # Ads
-# app.include_router(ads.router)
+# Users
+app.include_router(user.router)
+app.include_router(artist.router)
+# Products and Repairs
+app.include_router(used_products.router)
+app.include_router(musical_products.router)
+app.include_router(venues.router)
+app.include_router(repair.router)
+# Orders
+app.include_router(cart.router)
+app.include_router(orders.router)
+app.include_router(grow.router)
+# Ads
+app.include_router(ads.router)
 
 # app.include_router(packages.router)
 
-app.include_router(userv2.router)
-app.include_router(artist.router)
-app.include_router(venue.router)
+# app.include_router(userv2.router)
+# app.include_router(artist.router)
+# app.include_router(venue.router)
 
 @app.get("/")
 async def root():
