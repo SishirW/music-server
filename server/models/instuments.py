@@ -65,3 +65,7 @@ async def find_all_insturments(db, page, limit):
 
 # async def update_instrument(db,id,data):
 #     instrument
+
+async def check_instrument_exists(id,db):  
+    instrument = await db[collection_name].find_one({"_id": id})
+    return instrument!=None

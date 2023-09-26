@@ -6,7 +6,7 @@ class CreateVenueSchema(BaseModel):
     alias: str= Field(...)
     location: str= Field(...)
     description: str= Field(...)
-    category: str= Field(...)
+    category: List[str]= Field(...)
 
 class CreatePackageSchema(BaseModel):
     name: str = Field(...)

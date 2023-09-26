@@ -8,7 +8,8 @@ from fastapi import HTTPException, status
 import uuid
 import shutil,os
 from server.schemas_new.artist import CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema
-
+from ..models.instuments import check_instrument_exists
+from ..models.genres import check_genre_exists
 collection_name= 'Artist'
 schedule_collection_name= 'ArtistSchedule'
 follow_collection_name= 'ArtistFollow'
@@ -33,23 +34,28 @@ class ArtistFollow(BaseModel):
 
 class Artist(BaseModel):
     alias: str
-    #location: str = Field(...)
     description: str
     skills: List[str] =[]
     genre: List[str] =[]
+    looking_for: List[str]=[]
     images: List[str]=[]
     is_featured: bool= False
+    location: str
     #video: Optional[str]
     user_id: str= Field(...)
 
 
 async def add_artist(db, artist, user):
+    skills= [x for x in artist.skills if await check_instrument_exists(x,db)]
+    genre= [x for x in artist.genre if await check_genre_exists(x,db)]
     artist1 = Artist(
         alias= artist.alias,
         description= artist.description,
-        skills= artist.skills,
-        genre= artist.genre,
+        skills= skills,
+        genre= genre,
         user_id= user,
+        location=artist.location,
+        looking_for=artist.looking_for
     )
     encoded = jsonable_encoder(artist1)
     await db[collection_name].insert_one(encoded)
@@ -74,7 +80,7 @@ async def get_relevant_artist(db,page,genre, search, searchtype,user_id):
         pipeline= get_search_pipeline(search, user_id, page, searchtype)  # 0 for search by name. 1 for search by instrument
         artist =await db[collection_name].aggregate(pipeline).to_list(5)
     elif genre != None:
-        pipeline= get_genre_pipeline(search, user_id, page, searchtype)  # 0 for search by name. 1 for search by instrument
+        pipeline= get_genre_pipeline(genre, user_id, page)
         artist =await db[collection_name].aggregate(pipeline).to_list(5)
     else:
       pipeline= get_pipeline(user_id, page)
@@ -183,6 +189,18 @@ async def unfollow_artist(db, user, follow: FollowArtistSchema):
         return {f"Unfollowed"}
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not a follower")
+
+async def feature_artist(db,id):
+    await get_artist_byid(db, id)
+    result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_featured': True}})
+    print(result)
+    return {"success":True}
+
+async def unfeature_artist(db,id):
+    await get_artist_byid(db, id)
+    result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_featured': False}})
+    print(result)
+    return {"success":True}
 
 async def get_followers_count(db, artist_id):
     artist=await get_artist_byid(db, artist_id)
@@ -300,6 +318,22 @@ async def get_following(db, artist_id,page,user_id):
     }
   },
   {
+    "$lookup": {
+      "from": "Instruments",
+      "localField": "skills",
+      "foreignField": "_id",
+      "as": "instrument_details"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "Genres",
+      "localField": "genre",
+      "foreignField": "_id",
+      "as": "genre_details"
+    }
+  },
+  {
     "$addFields": {
       "isFollowedByUser": {
         "$in": [
@@ -346,6 +380,22 @@ def get_pipeline(user_id, page):
     }
   },
   {
+    "$lookup": {
+      "from": "Instruments",
+      "localField": "skills",
+      "foreignField": "_id",
+      "as": "instrument_details"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "Genres",
+      "localField": "genre",
+      "foreignField": "_id",
+      "as": "genre_details"
+    }
+  },
+  {
     "$addFields": {
       "isFollowedByUser": {
         "$in": [
@@ -379,9 +429,7 @@ def get_pipeline(user_id, page):
 ]
 
 def get_search_pipeline(keyword,user_id, page, type):
-    pipeline_term= "alias"
-    if type==1:
-        pipeline_term= "skills"
+    pipeline_term= "alias" if type==0 else "skills"
     
     return [
       {
@@ -407,6 +455,22 @@ def get_search_pipeline(keyword,user_id, page, type):
     "foreignField": "user",
     "as": "artist_following"
   }
+  },
+  {
+    "$lookup": {
+      "from": "Instruments",
+      "localField": "skills",
+      "foreignField": "_id",
+      "as": "instrument_details"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "Genres",
+      "localField": "genre",
+      "foreignField": "_id",
+      "as": "genre_details"
+    }
   },
   {
   "$addFields": {
@@ -443,16 +507,15 @@ def get_search_pipeline(keyword,user_id, page, type):
   
   
 
-def get_genre_pipeline(genre,user_id, page, type):
+def get_genre_pipeline(genre,user_id, page):
     return [
-      {
-  "$match": {
-    "genre": {
-      "$in":[genre],
-      "$options": "i"
-    }
-  }
-  },
+     {
+            "$match": {
+                "genre": {
+                    "$in": [genre]
+                }
+            }
+        },
   {
   "$lookup": {
     "from": "ArtistFollow",
@@ -468,6 +531,22 @@ def get_genre_pipeline(genre,user_id, page, type):
     "foreignField": "user",
     "as": "artist_following"
   }
+  },
+  {
+    "$lookup": {
+      "from": "Instruments",
+      "localField": "skills",
+      "foreignField": "_id",
+      "as": "instrument_details"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "Genres",
+      "localField": "genre",
+      "foreignField": "_id",
+      "as": "genre_details"
+    }
   },
   {
   "$addFields": {

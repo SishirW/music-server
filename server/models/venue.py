@@ -7,6 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid, shutil, os
 from server.schemas_new.venue import CreatePackageSchema, EditPackageSchema, BookPackageSchema
+from .venue_category import check_venuecategory_exists
 
 collection_name= 'Venue'
 package_collection_name= 'Package'
@@ -55,18 +56,19 @@ class Venue(BaseModel):
     alias: str = Field(...)   # separate name or user name ???
     location: str = Field(...)
     description: str = Field(...)
-    category: str = Field(...) 
+    category: List[str] = Field(...) 
     images: List[str]=[]
     is_featured: bool= False
     is_verified: bool= False
     user_id: str= Field(...)
     
 async def add_venue(db, venue, user):
+    category= [x for x in venue.category if await check_venuecategory_exists(x,db)]
     venue1= Venue(
        alias= venue.alias,
        location= venue.location,
        description= venue.description,
-       category= venue.category,
+       category= category,
        user_id=user
    )
     encoded = jsonable_encoder(venue1)
@@ -82,20 +84,30 @@ async def get_venue_by_userid(db, id):
     return venue
 
 async def get_venue_byid(db, id):
-    venue = await db[collection_name].find_one({"_id": id})
-    if venue is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"venue not found!")
+    pipeline= get_venue_detail_pipeline(id)  
+    venue =await db[collection_name].aggregate(pipeline).to_list(1000)
     return venue
 
-async def get_relevant_venue(db,page):
-    venue =await db[collection_name].find().skip((page-1)*5).limit(5).to_list(5)
+async def get_relevant_venue(db,page,category, search):
+    if search != None:
+        pipeline= get_search_pipeline(search, page)  
+        venue =await db[collection_name].aggregate(pipeline).to_list(5)
+    elif category != None:
+        pipeline= get_category_pipeline(category, page)  
+        venue =await db[collection_name].aggregate(pipeline).to_list(5)
+    else:
+      pipeline= get_pipeline(page)
+      venue =await db[collection_name].aggregate(pipeline).to_list(5)
     return venue
 
 async def get_featured_venue(db,page):
-    venue =await db[collection_name].find().sort(
-            [('featured', -1)]).skip((page-1)*5).limit(5).to_list(5)
+    venue =await db[collection_name].find({"is_featured":True}).skip((page-1)*5).limit(5).to_list(5)
     return venue
+
+async def get_requested_venue(db,page):
+    venue =await db[collection_name].find({"is_verified":False}).skip((page-1)*5).limit(5).to_list(5)
+    return venue
+
 
 async def add_images(db,venue_id, files):
     names = []
@@ -113,7 +125,6 @@ async def add_images(db,venue_id, files):
 
 async def add_package(db,package: CreatePackageSchema,user_id):
     venue= await get_venue_by_userid(db, user_id)
-    print(venue)
     pkg= Package(
         venue_id= venue['_id'],
         name= package.name,
@@ -181,46 +192,148 @@ async def book_package(db,package_id,user,booking: BookPackageSchema):
     await db[booking_collection_name].insert_one(encoded)
     return {'success': True}
 
+async def feature_venue(db,id):
+    await get_venue_byid(db, id)
+    result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_featured': True}})
+    print(result)
+    return {"success":True}
 
+async def unfeature_venue(db,id):
+    await get_venue_byid(db, id)
+    result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_featured': False}})
+    print(result)
+    return {"success":True}
 
+async def verify_venue(db,id):
+    await get_venue_byid(db, id)
+    result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_verified': True}})
+    print(result)
+    return {"success":True}
 
-def edit_venue():
-    pass
+async def unverify_venue(db,id):
+    await get_venue_byid(db, id)
+    result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_verified': False}})
+    print(result)
+    return {"success":True}
 
-def get_venue():   # Venue owned by logged in user
-    pass
+def get_pipeline(page):
+    return [
+        {
+            "$match": {
+                "is_verified": True
+            }
+        },
+  
+  {
+    "$lookup": {
+      "from": "VenueCategories",
+      "localField": "category",
+      "foreignField": "_id",
+      "as": "category_details"
+    }
+  },
+  
+  {
+      "$sort":{
+          "is_featured":-1,
+          "_id":1,
+      }
+  },
+  {
+    "$skip": (page-1)*5
+  },
+  {
+    "$limit": 5
+  }
+]
 
-def get_venue_packages():
-    pass
+def get_search_pipeline(keyword, page):
+    
+    
+    return [
+      {
+  "$match": {
+    "alias": {
+      "$regex": f".*{keyword}.*",
+      "$options": "i"
+    },
+    "is_verified": True,
+  }
+  },
+  
+  
+  {
+    "$lookup": {
+      "from": "VenueCategories",
+      "localField": "category",
+      "foreignField": "_id",
+      "as": "category_details"
+    }
+  },
+  
+  {
+    "$sort":{
+        "is_featured":-1,
+        "_id":1,
+    }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
+  
+  
 
-def get_venue_booking_details():
-    pass
+def get_category_pipeline(category, page):
+    return [
+      {
+            "$match": {
+                "category": {
+                    "$in": [category]
+                },
+                "is_verified": True
+            }
+        },
+        {
+    "$lookup": {
+      "from": "VenueCategories",
+      "localField": "category",
+      "foreignField": "_id",
+      "as": "category_details"
+    }
+  },
+  
+  {
+    "$sort":{
+        "is_featured":-1,
+        "_id":1,
+    }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
+    
 
-def get_venue_rating():
-    pass
-
-def delete_venue():
-    pass
-
-def delete_featured_venue():
-    pass
-
-def update_package():
-    pass
-
-def update_schedule():
-    pass
-
-def validate_venue():
-    pass
-
-def invalidate_package():
-    pass
-
-def delete_schedule():
-    pass
-
-def complete_booked_package():
-    pass
-
-
+def get_venue_detail_pipeline(id):
+    return [
+      {
+            "$match": {
+                "_id": id
+            }
+        },
+        {
+    "$lookup": {
+      "from": "Package",
+      "localField": "_id",
+      "foreignField": "venue_id",
+      "as": "package_details"
+    }
+  },
+]

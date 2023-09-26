@@ -65,3 +65,7 @@ async def find_all_genres(db, page, limit):
 
 # async def update_genre(db,id,data):
 #     genre
+
+async def check_genre_exists(id,db):  
+    genre = await db[collection_name].find_one({"_id": id})
+    return genre!=None

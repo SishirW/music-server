@@ -7,6 +7,8 @@ class CreateArtistSchema(BaseModel):
     description: str
     skills: List[str] =[]
     genre: List[str] =[]
+    location: str
+    looking_for: List[str]=[]
 
 class CreateScheduleSchema(BaseModel):
     venue: Optional[str]
