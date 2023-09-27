@@ -65,9 +65,9 @@ async def get_followings(request: Request, artist: str, current_user: ShowUserWi
 
 
 @router.get('/{id}')
-async def get_artist_by_id(id: str, request: Request):
+async def get_artist_by_id(id: str, request: Request, current_user: ShowUserWithId = Depends(validate_user_without_error)):
     db = get_database(request)
-    result = await get_artist_byid(db, id)
+    result = await get_artist_byid(db, id, current_user['_id'])
     return jsonable_encoder(result)
 
 @router.get('/user/{id}')
