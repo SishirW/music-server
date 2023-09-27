@@ -14,12 +14,23 @@ class CreatePackageSchema(BaseModel):
     date_time: datetime= Field(...)
     description: str = Field(...)
 
+class CreateScheduleSchema(BaseModel):
+    artist: Optional[str]
+    description: str= Field(...)
+    start_time: datetime= Field()
+    end_time: datetime= Field()
+
 class EditPackageSchema(BaseModel):
     name: Optional[str] 
     price: Optional[int] 
     date_time: Optional[datetime]
     description: Optional[str] 
 
+class EditScheduleSchema(BaseModel):
+    artist: Optional[str]
+    description: Optional[str]
+    start_time: Optional[datetime]
+    end_time: Optional[datetime]
 
 class BookPackageSchema(BaseModel):
     phone: int

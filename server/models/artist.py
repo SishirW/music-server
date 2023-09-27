@@ -65,7 +65,7 @@ async def get_artist_by_userid(db, id):
     artist = await db[collection_name].find_one({"user_id": id})
     if artist is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"artist not found!")
+                            detail=f"Artist not found!")
     return artist
 
 async def get_artist_byid(db, id, user_id):
