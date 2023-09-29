@@ -1,11 +1,12 @@
 from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
-from server.routers.user import validate_user, validate_artist, get_current_user,validate_user_without_error
+from server.routers.user import validate_user, validate_artist, get_current_user,validate_user_without_error, validate_admin
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.artist import CreateArtistSchema, CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema
 from server.db import get_database
-from server.models.artist import add_artist,get_follower,get_following,get_followers_count,unfollow_artist,follow_artist,edit_schedule,delete_schedule, add_schedule,get_artist_by_userid, Artist, get_artist_byid, get_featured_artist, get_relevant_artist,add_images
+from server.models.artist import feature_artist,unfeature_artist,add_artist,get_follower,get_following,get_followers_count,unfollow_artist,follow_artist,edit_schedule,delete_schedule, add_schedule,get_artist_by_userid, Artist, get_artist_byid, get_featured_artist, get_relevant_artist,add_images
 from server.schemas import ShowUserWithId
 from typing import List
+
 router = APIRouter(prefix="/artist", tags=["Artist"])
 
 
@@ -28,9 +29,9 @@ async def follow_artists(request: Request, follow: FollowArtistSchema, current_u
     return jsonable_encoder(result)
 
 @router.get('/')
-async def get_relevant_artists(request: Request, page: int = 1):
+async def get_relevant_artists(request: Request, page: int = 1, genre: str = None, search: str = None, searchtype: int = 0, current_user: ShowUserWithId = Depends(validate_user_without_error)):
     db = get_database(request)
-    result = await get_relevant_artist(db,page)
+    result = await get_relevant_artist(db,page, genre, search, searchtype,current_user['_id'])
     return jsonable_encoder(result)
 
 
@@ -64,9 +65,9 @@ async def get_followings(request: Request, artist: str, current_user: ShowUserWi
 
 
 @router.get('/{id}')
-async def get_artist_by_id(id: str, request: Request):
+async def get_artist_by_id(id: str, request: Request, current_user: ShowUserWithId = Depends(validate_user_without_error)):
     db = get_database(request)
-    result = await get_artist_byid(db, id)
+    result = await get_artist_byid(db, id, current_user['_id'])
     return jsonable_encoder(result)
 
 @router.get('/user/{id}')
@@ -95,6 +96,17 @@ async def unfollow_artists(request: Request, follow: FollowArtistSchema, current
     result=await unfollow_artist(db, current_user['_id'], follow)
     return jsonable_encoder(result)
 
+@router.put('/feature',response_description='Feature artist')
+async def feature_artists(request: Request, id:str, current_user: ShowUserWithId = Depends(validate_admin)):
+    db = get_database(request)
+    result=await feature_artist(db,id)
+    return jsonable_encoder(result)
+
+@router.put('/unfeature',response_description='Feature artist')
+async def unfeature_artists(request: Request, id:str, current_user: ShowUserWithId = Depends(validate_admin)):
+    db = get_database(request)
+    result=await unfeature_artist(db,id)
+    return jsonable_encoder(result)
 
 @router.delete('/schedule', response_description='Delete artist schedule',status_code=status.HTTP_204_NO_CONTENT)
 async def delete_artist_schedule(request: Request, schedule_id: str, current_user: ShowUserWithId = Depends(validate_artist)):

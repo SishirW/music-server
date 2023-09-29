@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from server.routers import musical_products, user, auth, venues, cart, orders, artist, packages, grow, used_products, repair, ads
-from server.routers_new import instruments, genres, bands, user as userv2, artist, venue
+from server.routers_new import instruments, genres, bands, user as userv2, artist, venue,venue_category
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from starlette.middleware.cors import CORSMiddleware
@@ -45,28 +45,31 @@ async def shutdown_db_client():
 app.include_router(bands.router)
 app.include_router(instruments.router)
 app.include_router(genres.router)
+#Venue
+app.include_router(venue.router)
+app.include_router(venue_category.router)
 # # For Authentication
 app.include_router(auth.router)
-# # Users
-# app.include_router(user.router)
-# app.include_router(artist.router)
-# # Products and Repairs
-# app.include_router(used_products.router)
-# app.include_router(musical_products.router)
-# app.include_router(venues.router)
-# app.include_router(repair.router)
-# # Orders
-# app.include_router(cart.router)
-# app.include_router(orders.router)
-# app.include_router(grow.router)
-# # Ads
-# app.include_router(ads.router)
+# Users
+app.include_router(user.router)
+app.include_router(artist.router)
+# Products and Repairs
+app.include_router(used_products.router)
+app.include_router(musical_products.router)
+#app.include_router(venues.router)
+app.include_router(repair.router)
+# Orders
+app.include_router(cart.router)
+app.include_router(orders.router)
+app.include_router(grow.router)
+# Ads
+app.include_router(ads.router)
 
 # app.include_router(packages.router)
 
-app.include_router(userv2.router)
-app.include_router(artist.router)
-app.include_router(venue.router)
+# app.include_router(userv2.router)
+# app.include_router(artist.router)
+# app.include_router(venue.router)
 
 @app.get("/")
 async def root():
