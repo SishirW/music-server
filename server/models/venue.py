@@ -15,6 +15,7 @@ schedule_collection_name= 'VenueSchedule'
 booking_collection_name= 'PackageBooking'
 review_collection_name= 'VenueReview'
 payment_collection_name= 'Transaction'
+points_collection_name= 'RewardPoints'
 class Category(BaseModel):
     category: str
 
@@ -296,7 +297,14 @@ async def book_package(db,user,booking: BookPackageSchema):
         booking_time= datetime.now(),
     )
     book= await db[booking_collection_name].insert_one(jsonable_encoder(booking))
+    await update_points(db, user, payment_details['amount_paid_in_rs']*0.1)
     return {'success': True}
+
+async def update_points(db, user, point_to_add):
+    point_detail= await db[points_collection_name].find_one({'user':user})
+    point= point_detail['points']
+    check= await db[points_collection_name].update_one({'user':user},{'$set': {'points': point+point_to_add}})
+
 async def complete_payment(db ,venue,package,payment, user):
     payment= Payment(
         khalti_token=payment.khalti_token,
