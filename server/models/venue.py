@@ -6,14 +6,15 @@ from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid, shutil, os
-from server.schemas_new.venue import CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
+from server.schemas_new.venue import CreateReviewSchema,CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
 from .venue_category import check_venuecategory_exists
 
 collection_name= 'Venue'
 package_collection_name= 'Package'
 schedule_collection_name= 'VenueSchedule'
 booking_collection_name= 'PackageBooking'
-
+review_collection_name= 'VenueReview'
+payment_collection_name= 'Transaction'
 class Category(BaseModel):
     category: str
 
@@ -24,21 +25,44 @@ class VenueSchedule(BaseModel):
     start_time: datetime
     end_time: datetime
 
-class PaymentDetails(BaseModel):
-    token: str
+class VenueReview(BaseModel):
+    reviewee: str
+    reviewer: str
+    venue: str
+    rating: int
+    review: str
+
+
+class Payment(BaseModel):
+    khalti_token: str
     idx: str
     phone: str
-    amount_paid: int
+    amount: int
     amount_paid_in_rs: int
+    package: str
+    venue:str
+    user_id:str
+class Test(BaseModel):
+    name: str
 
+# class Payment(BaseModel):
+#     khalti_token : str
+#     idx: str
+#     phone: str
+#     amount: float
+#     amount_in_rs: float
+#     package: str
+#     venue:str
+#     user_id:str
 
 class PackageBooking(BaseModel):
     package_id: str= Field(...)
+    venue_id: str= Field(...)
     user_id: str= Field(...)
-    phone: int
     complete: bool= False
-    payment_details: Optional[PaymentDetails]
+    payment: str
     booking_time: datetime
+
 
 
 class Package(BaseModel):
@@ -53,7 +77,7 @@ class Package(BaseModel):
 
 
 class Venue(BaseModel):
-    alias: str = Field(...)   # separate name or user name ???
+    alias: str = Field(...)
     location: str = Field(...)
     description: str = Field(...)
     category: List[str] = Field(...) 
@@ -90,6 +114,13 @@ async def get_venue_byid(db, id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"Venue not found!")
     return venue
+
+async def check_venue_exists(db, id):
+    artist = await db[collection_name].find_one({"_id": id})
+    if artist is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Venue not found!")
+    return artist
 
 async def get_relevant_venue(db,page,category, search):
     if search != None:
@@ -237,19 +268,69 @@ async def delete_schedule(db, schedule_id, user):
     else:
         raise HTTPException(status_code=404, detail=f"schedule not found")
 
-async def book_package(db,package_id,user,booking: BookPackageSchema):
-    package= await db[package_collection_name].find_one({"_id": package_id})
+
+async def get_payment_by_id(db,id):
+    payment= await db[payment_collection_name].find_one({"_id": id})
+    if payment is None:
+        raise HTTPException(status_code=404, detail=f"payment not found")
+    return payment
+
+async def get_venue_package_booking(db, package_id, user,page):
+    venue= await get_venue_by_userid(db, user)
+    print(venue)
+    pipeline= get_venue_package_pipeline(package_id, venue['_id'], page)  
+    reviews =await db[booking_collection_name].aggregate(pipeline).to_list(5)
+    return reviews
+
+async def book_package(db,user,booking: BookPackageSchema):
+    package= await db[package_collection_name].find_one({"_id": booking.package})
     if package is None:
         raise HTTPException(status_code=404, detail=f"Package not found")
-    book= PackageBooking(
-        package_id= package_id,
+    payment_details= await complete_payment(db, package['venue_id'], booking.package,booking.payment, user)
+    booking= PackageBooking(
+        package_id= booking.package,
+        venue_id= package['venue_id'],
         user_id= user,
-        phone= booking.phone,
-        booking_time= datetime.now()
+        complete= True,
+        payment= payment_details['_id'],
+        booking_time= datetime.now(),
     )
-    encoded = jsonable_encoder(book)
-    await db[booking_collection_name].insert_one(encoded)
+    book= await db[booking_collection_name].insert_one(jsonable_encoder(booking))
     return {'success': True}
+async def complete_payment(db ,venue,package,payment, user):
+    payment= Payment(
+        khalti_token=payment.khalti_token,
+        idx=payment.idx,
+        phone=payment.phone,
+        amount=payment.amount,
+        amount_paid_in_rs=payment.amount/100,
+        package=package,
+        venue= venue,
+        user_id=user
+    )
+    await db[payment_collection_name].insert_one(jsonable_encoder(payment))
+    payment_detail=await get_payment_by_id(db, str(payment.id))
+    return payment_detail
+
+async def add_review(db, review: CreateReviewSchema, user):
+    venue= await check_venue_exists(db, review.venue)
+    review= VenueReview(
+        reviewee= venue["user_id"],
+        reviewer= user,
+        venue= review.venue,
+        rating= review.rating,
+        review= review.review
+    )
+    encoded = jsonable_encoder(review)
+    await db[review_collection_name].insert_one(encoded)
+    return {'success': True}
+
+async def get_venue_review(db, id,page):
+    venue= await check_venue_exists(db, id)
+    pipeline= get_venue_review_pipeline(id, page)  
+    reviews =await db[review_collection_name].aggregate(pipeline).to_list(5)
+    return reviews
+
 
 async def feature_venue(db,id):
     await get_venue_byid(db, id)
@@ -381,4 +462,93 @@ def get_venue_detail_pipeline(id):
       "as": "schedule_details"
     }
   },
+]
+
+def get_venue_review_pipeline(id, page):
+    return [
+      {
+            "$match": {
+                "venue": id
+            }
+        },
+        {
+    "$lookup": {
+      "from": "Users",
+      "localField": "reviewer",
+      "foreignField": "_id",
+      "as": "user_details"
+    }
+        },
+        {
+            "$unwind": "$user_details"
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "reviewee": 1,
+                "reviewer": 1,
+                "venue": 1,
+                "rating": 1,
+                "review": 1,
+                "username": "$user_details.username"
+            }
+        },
+        
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
+
+def get_venue_package_pipeline(package, venue, page):
+    return [
+      {
+            "$match": {
+                "package_id": package,
+                "venue_id": venue,
+            }
+        },
+        {
+    "$lookup": {
+      "from": "Users",
+      "localField": "user_id",
+      "foreignField": "_id",
+      "as": "user_details"
+    },
+    
+        },
+        {
+    "$lookup": {
+      "from": "Transaction",
+      "localField": "payment",
+      "foreignField": "_id",
+      "as": "payment_details"
+    },
+    
+        },
+        
+        {
+            "$unwind": "$user_details"
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "package_id": 1,
+                "venue_id": 1,
+                "complete": 1,
+                "payment": 1,
+                "booking_time": 1,
+                "username": "$user_details.username",
+                "payment_details": "$payment_details",
+            }
+        },
+         {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+  
 ]

@@ -55,7 +55,8 @@ async def add_artist(db, artist, user):
         genre= genre,
         user_id= user,
         location=artist.location,
-        looking_for=artist.looking_for
+        looking_for=artist.looking_for,
+        images= artist.images
     )
     encoded = jsonable_encoder(artist1)
     await db[collection_name].insert_one(encoded)
@@ -76,7 +77,14 @@ async def get_artist_byid(db, id, user_id):
                              detail=f"artist not found!")
     
     return artist
-    
+
+async def check_artist_exists(db, id):
+    artist = await db[collection_name].find_one({"_id": id})
+    if artist is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"artist not found!")
+    return artist
+  
 
 async def get_relevant_artist(db,page,genre, search, searchtype,user_id):
     if search != None:
@@ -165,7 +173,7 @@ async def delete_schedule(db, schedule_id, user):
         raise HTTPException(status_code=404, detail=f"schedule not found")
 
 async def follow_artist(db, user, follow: FollowArtistSchema):
-    artist= await get_artist_byid(db, follow.artist)
+    artist= await check_artist_exists(db, follow.artist)
     query= {"$and": [
         {"artist": artist['user_id']},
         {"user": user}
@@ -182,7 +190,7 @@ async def follow_artist(db, user, follow: FollowArtistSchema):
     return {'success': True}
 
 async def unfollow_artist(db, user, follow: FollowArtistSchema):
-    artist= await get_artist_byid(db, follow.artist)
+    artist= await check_artist_exists(db, follow.artist)
     query= {"$and": [
         {"artist": follow.artist},
         {"user": user}
@@ -194,19 +202,19 @@ async def unfollow_artist(db, user, follow: FollowArtistSchema):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not a follower")
 
 async def feature_artist(db,id):
-    await get_artist_byid(db, id)
+    await check_artist_exists(db, id)
     result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_featured': True}})
     print(result)
     return {"success":True}
 
 async def unfeature_artist(db,id):
-    await get_artist_byid(db, id)
+    await check_artist_exists(db, id)
     result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_featured': False}})
     print(result)
     return {"success":True}
 
 async def get_followers_count(db, artist_id):
-    artist=await get_artist_byid(db, artist_id)
+    artist=await check_artist_exists(db, artist_id)
     artist_user_id= artist['user_id']
     pipeline= [
   {
@@ -240,7 +248,7 @@ async def get_followers_count(db, artist_id):
     return count
 
 async def get_follower(db, artist_id,page,user_id):
-    artist=await get_artist_byid(db, artist_id)
+    artist=await check_artist_exists(db, artist_id)
     artist_user_id= artist['user_id']
     pipeline= [
   {
@@ -296,7 +304,7 @@ async def get_follower(db, artist_id,page,user_id):
 
 
 async def get_following(db, artist_id,page,user_id):
-    artist=await get_artist_byid(db, artist_id)
+    artist=await check_artist_exists(db, artist_id)
     artist_user_id= artist['user_id']
     pipeline= [
   {
@@ -318,22 +326,6 @@ async def get_following(db, artist_id,page,user_id):
       "localField": "artist",
       "foreignField": "artist",
       "as": "artist_followers"
-    }
-  },
-  {
-    "$lookup": {
-      "from": "Instruments",
-      "localField": "skills",
-      "foreignField": "_id",
-      "as": "instrument_details"
-    }
-  },
-  {
-    "$lookup": {
-      "from": "Genres",
-      "localField": "genre",
-      "foreignField": "_id",
-      "as": "genre_details"
     }
   },
   {

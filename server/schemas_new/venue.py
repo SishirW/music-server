@@ -20,11 +20,17 @@ class CreateScheduleSchema(BaseModel):
     start_time: datetime= Field()
     end_time: datetime= Field()
 
+class CreateReviewSchema(BaseModel):
+    venue: str
+    rating: int
+    review: str
+
 class EditPackageSchema(BaseModel):
     name: Optional[str] 
     price: Optional[int] 
     date_time: Optional[datetime]
     description: Optional[str] 
+    valid: Optional[bool]
 
 class EditScheduleSchema(BaseModel):
     artist: Optional[str]
@@ -32,5 +38,17 @@ class EditScheduleSchema(BaseModel):
     start_time: Optional[datetime]
     end_time: Optional[datetime]
 
+class PaymentSchema(BaseModel):
+    khalti_token : str
+    idx: str
+    phone: str
+    amount: float
+    package: str
+    venue:str
+    user_id:str
+
+
 class BookPackageSchema(BaseModel):
+    package: str
     phone: int
+    payment: PaymentSchema
