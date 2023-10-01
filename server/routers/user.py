@@ -74,8 +74,10 @@ async def create_user(request: Request, user: CreateUser, background_tasks: Back
             detail=["email", "Email already taken"],
         )
     new_user = await request.app.mongodb['Users'].insert_one(user)
+    await request.app.mongodb['RewardPoints'].insert_one({'_id': str(uuid.uuid4()), 'user': new_user.inserted_id, 'points': 0 })
     validation_number = randomDigits(5)
     await request.app.mongodb['Users'].update_one({'_id': new_user.inserted_id}, {'$set': {'points': 0, 'bookings': [], 'devices': [], 'validation_token': [{'number': validation_number, 'created_at': created_at}]}})
+    
     background_tasks.add_task(
         send_email, email=user['email'], message=f'Your Confirmation code is {validation_number} .')
 

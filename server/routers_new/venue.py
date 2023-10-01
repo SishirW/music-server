@@ -1,11 +1,11 @@
 from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
 from typing import List
 from fastapi.encoders import jsonable_encoder
-from server.schemas_new.venue import CreateVenueSchema, CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
+from server.schemas_new.venue import CreateVenueSchema,CreateReviewSchema, CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
 from server.routers.user import validate_user, validate_venue, validate_admin
 from server.schemas import ShowUserWithId
 from server.db import get_database
-from server.models.venue import delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
+from server.models.venue import get_venue_package_booking,get_venue_review,add_review,delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
 
 router = APIRouter(prefix="/venue", tags=["Venue"])
 
@@ -24,9 +24,9 @@ async def add_new_package(request: Request, package: CreatePackageSchema, curren
 
 
 @router.post('/booking')
-async def book_packages(request: Request, package_id: str,booking: BookPackageSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def book_packages(request: Request,booking: BookPackageSchema, current_user: ShowUserWithId = Depends(validate_user)):
     db = get_database(request)
-    result = await book_package(db, package_id, current_user['_id'],booking)
+    result = await book_package(db, current_user['_id'],booking)
     return jsonable_encoder(result)
 
 
@@ -36,6 +36,11 @@ async def add_new_schedule(request: Request, schedule: CreateScheduleSchema, cur
     result = await add_schedule(db, schedule, current_user['_id'])
     return jsonable_encoder(result)
 
+@router.post('/review')
+async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(validate_user)):
+    db = get_database(request)
+    result = await add_review(db, review, current_user['_id'])
+    return jsonable_encoder(result)
 
 @router.get('/')
 async def get_relevant_venues(request: Request, page: int = 1,category: str = None, search: str = None):
@@ -54,6 +59,18 @@ async def get_featured_venues(request: Request, page: int = 1):
 async def get_requested_venues(request: Request, page: int = 1, current_user: ShowUserWithId = Depends(validate_admin)):
     db = get_database(request)
     result = await get_requested_venue(db,page)
+    return jsonable_encoder(result)
+
+@router.get('/review')
+async def get_venue_reviews(request: Request, id:str,page: int = 1):
+    db = get_database(request)
+    result = await get_venue_review(db,id,page)
+    return jsonable_encoder(result)
+
+@router.get('/booking')
+async def get_venue_package_bookings(request: Request, package_id:str,page: int = 1, current_user: ShowUserWithId = Depends(validate_venue)):
+    db = get_database(request)
+    result = await get_venue_package_booking(db,package_id,current_user['_id'],page)
     return jsonable_encoder(result)
 
 

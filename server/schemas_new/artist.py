@@ -9,6 +9,7 @@ class CreateArtistSchema(BaseModel):
     genre: List[str] =[]
     location: str
     looking_for: List[str]=[]
+    images: List[str]= Field(...)
 
 class CreateScheduleSchema(BaseModel):
     venue: Optional[str]
