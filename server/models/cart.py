@@ -7,8 +7,6 @@ import uuid, shutil, os
 from .products import check_product_exists
 from server.schemas_new.cart import AddToCart
 
-# from server.schemas_new.products import EditProductSchema, CreateReviewSchema, CreateQuestionSchema, CreateQuestionResponseSchema
-
 
 collection_name= 'Cart'
 

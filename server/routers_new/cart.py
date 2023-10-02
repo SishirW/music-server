@@ -3,7 +3,7 @@ from typing import List
 from fastapi.encoders import jsonable_encoder
 from server.db import get_database
 from server.schemas_new.cart import AddToCart
-from server.routers.user import validate_user, validate_admin, get_current_user
+from ..utils.user import  validate_admin, get_current_user
 from server.schemas import ShowUserWithId
 from server.models.cart import create_cart, get_relevant_cart,delete_cart
 router = APIRouter(prefix="/cart", tags=["Cart"])

@@ -1,7 +1,7 @@
 from fastapi import Request, HTTPException,APIRouter,status
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.user import CreateUserSchema, EditUserSchema
-from server.models.user import create_user, find_user_by_id, find_user_by_email, find_user_by_username,delete_user_by_id,edit_user_details
+from server.models.user import verify_user,create_user, find_user_by_id, find_user_by_email, find_user_by_username,delete_user_by_id,edit_user_details
 from server.db import get_database
 router = APIRouter(prefix="/user", tags=["User"])
 
@@ -36,6 +36,11 @@ async def remove_user_by_id(id: str, request: Request):
     result = await delete_user_by_id(db, id)
     return jsonable_encoder(result)
 
+@router.put('/verify')
+async def verify_users(request: Request, id: str, token: int):
+    db = get_database(request)
+    result = await verify_user(db, id, token)
+    return jsonable_encoder(result)
 @router.put('/{id}')
 async def edit_user_by_id(id: str, request: Request,info: EditUserSchema):
     db = get_database(request)

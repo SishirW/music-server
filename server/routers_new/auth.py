@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
 from datetime import datetime, timedelta
 from ..schemas import Token, TokenData
-from ..password_methods import verify_password
+from ..utils.password_methods import verify_password
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from .user import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
-from .user import randomDigits
-from .user import send_email
+from ..routers.user import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from ..routers.user import randomDigits
+from ..routers.user import send_email
 
 router = APIRouter(tags=['Authentication'])
 

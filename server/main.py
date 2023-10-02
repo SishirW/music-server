@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from server.routers import  user, auth, venues, cart, orders, artist, packages, grow, used_products, repair, ads
-from server.routers_new import instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
+from server.routers import   venues, cart, orders, artist, packages, grow, used_products, repair, ads
+from server.routers_new import user,auth, instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from starlette.middleware.cors import CORSMiddleware

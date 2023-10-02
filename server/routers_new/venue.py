@@ -2,7 +2,7 @@ from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
 from typing import List
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.venue import CreateVenueSchema,CreateReviewSchema, CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
-from server.routers.user import validate_user, validate_venue, validate_admin
+from ..utils.user import get_current_user, validate_venue, validate_admin
 from server.schemas import ShowUserWithId
 from server.db import get_database
 from server.models.venue import get_venue_package_booking,get_venue_review,add_review,delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/venue", tags=["Venue"])
 
 
 @router.post('/')
-async def add_new_venue(request: Request, venue: CreateVenueSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_new_venue(request: Request, venue: CreateVenueSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_venue(db, venue,current_user['_id'])
     return jsonable_encoder(result)
@@ -24,7 +24,7 @@ async def add_new_package(request: Request, package: CreatePackageSchema, curren
 
 
 @router.post('/booking')
-async def book_packages(request: Request,booking: BookPackageSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def book_packages(request: Request,booking: BookPackageSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await book_package(db, current_user['_id'],booking)
     return jsonable_encoder(result)
@@ -37,7 +37,7 @@ async def add_new_schedule(request: Request, schedule: CreateScheduleSchema, cur
     return jsonable_encoder(result)
 
 @router.post('/review')
-async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_review(db, review, current_user['_id'])
     return jsonable_encoder(result)

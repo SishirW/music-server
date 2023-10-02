@@ -1,5 +1,5 @@
 from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
-from server.routers.user import validate_user, validate_artist, get_current_user,validate_user_without_error, validate_admin
+from ..utils.user import validate_artist, get_current_user,validate_user_without_error, validate_admin
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.artist import CreateArtistSchema, CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema
 from server.db import get_database
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/artist", tags=["Artist"])
 
 
 @router.post('/')
-async def add_new_artist(request: Request, artist: CreateArtistSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_new_artist(request: Request, artist: CreateArtistSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_artist(db, artist,current_user['_id'])
     return jsonable_encoder(result)
@@ -23,7 +23,7 @@ async def add_new_schedule(request: Request, schedule: CreateScheduleSchema, cur
     return jsonable_encoder(result)
 
 @router.post('/follow', response_description='Follow artist')
-async def follow_artists(request: Request, follow: FollowArtistSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def follow_artists(request: Request, follow: FollowArtistSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result=await follow_artist(db, current_user['_id'], follow)
     return jsonable_encoder(result)
@@ -91,7 +91,7 @@ async def edit_artist_schedule(request: Request, schedule: EditScheduleSchema, s
     return jsonable_encoder(result)
 
 @router.put('/unfollow', response_description='Follow artist')
-async def unfollow_artists(request: Request, follow: FollowArtistSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def unfollow_artists(request: Request, follow: FollowArtistSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result=await unfollow_artist(db, current_user['_id'], follow)
     return jsonable_encoder(result)
