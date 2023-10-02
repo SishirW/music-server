@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from server.routers import  user, auth, venues, cart, orders, artist, packages, grow, used_products, repair, ads
-from server.routers_new import instruments, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
+from server.routers_new import instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from starlette.middleware.cors import CORSMiddleware
@@ -44,6 +44,7 @@ async def shutdown_db_client():
 app.include_router(products.router)
 
 app.include_router(product_category.router)
+app.include_router(cart.router)
 # For band
 app.include_router(bands.router)
 app.include_router(instruments.router)
