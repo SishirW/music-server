@@ -293,7 +293,7 @@ async def book_package(db,user,booking: BookPackageSchema):
 
     )
     book= await db[booking_collection_name].insert_one(jsonable_encoder(booking))
-    await update_points(db, user, payment_details['amount_paid_in_rs']*0.1)
+    await update_points(db, user, package['reward_points'])
     return {'success': True}
 
 async def check_seats_on_date(db, book_date, package):
