@@ -8,13 +8,12 @@ from fastapi import HTTPException, status
 import uuid, shutil, os
 from server.schemas_new.venue import CreateReviewSchema,CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
 from .venue_category import check_venuecategory_exists
-
+from .payment import complete_booking_payment
 collection_name= 'Venue'
 package_collection_name= 'Package'
 schedule_collection_name= 'VenueSchedule'
 booking_collection_name= 'PackageBooking'
 review_collection_name= 'VenueReview'
-payment_collection_name= 'Transaction'
 points_collection_name= 'RewardPoints'
 class Category(BaseModel):
     category: str
@@ -34,15 +33,7 @@ class VenueReview(BaseModel):
     review: str
 
 
-class Payment(BaseModel):
-    khalti_token: str
-    idx: str
-    phone: str
-    amount: int
-    amount_paid_in_rs: int
-    package: str
-    venue:str
-    user_id:str
+
 class Test(BaseModel):
     name: str
 
@@ -270,11 +261,7 @@ async def delete_schedule(db, schedule_id, user):
         raise HTTPException(status_code=404, detail=f"schedule not found")
 
 
-async def get_payment_by_id(db,id):
-    payment= await db[payment_collection_name].find_one({"_id": id})
-    if payment is None:
-        raise HTTPException(status_code=404, detail=f"payment not found")
-    return payment
+
 
 async def get_venue_package_booking(db, package_id, user,page):
     venue= await get_venue_by_userid(db, user)
@@ -287,7 +274,7 @@ async def book_package(db,user,booking: BookPackageSchema):
     package= await db[package_collection_name].find_one({"_id": booking.package})
     if package is None:
         raise HTTPException(status_code=404, detail=f"Package not found")
-    payment_details= await complete_payment(db, package['venue_id'], booking.package,booking.payment, user)
+    payment_details= await complete_booking_payment(db, package['venue_id'], booking.package,booking.payment, user)
     booking= PackageBooking(
         package_id= booking.package,
         venue_id= package['venue_id'],
@@ -305,20 +292,6 @@ async def update_points(db, user, point_to_add):
     point= point_detail['points']
     check= await db[points_collection_name].update_one({'user':user},{'$set': {'points': point+point_to_add}})
 
-async def complete_payment(db ,venue,package,payment, user):
-    payment= Payment(
-        khalti_token=payment.khalti_token,
-        idx=payment.idx,
-        phone=payment.phone,
-        amount=payment.amount,
-        amount_paid_in_rs=payment.amount/100,
-        package=package,
-        venue= venue,
-        user_id=user
-    )
-    await db[payment_collection_name].insert_one(jsonable_encoder(payment))
-    payment_detail=await get_payment_by_id(db, str(payment.id))
-    return payment_detail
 
 async def add_review(db, review: CreateReviewSchema, user):
     venue= await check_venue_exists(db, review.venue)

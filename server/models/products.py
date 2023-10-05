@@ -65,6 +65,10 @@ async def check_product_exists(db, id):
                             detail=f"product not found!")
     return artist
 
+async def check_product(db, id):  
+    product = await db[collection_name].find_one({"_id": id})
+    return product!=None
+
 async def get_relevant_product(db,page,category, search):
     if search != None:
         pipeline= get_search_pipeline(search, page)  

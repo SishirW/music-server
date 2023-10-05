@@ -3,7 +3,6 @@ from typing import List
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
-import uuid, shutil, os
 from .products import check_product_exists
 from server.schemas_new.cart import AddToCart
 
