@@ -2,7 +2,7 @@ from . import BaseModel
 from typing import List, Optional
 from pydantic import EmailStr,Field
 from .bands import Location
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid, shutil, os
@@ -34,18 +34,6 @@ class VenueReview(BaseModel):
 
 
 
-class Test(BaseModel):
-    name: str
-
-# class Payment(BaseModel):
-#     khalti_token : str
-#     idx: str
-#     phone: str
-#     amount: float
-#     amount_in_rs: float
-#     package: str
-#     venue:str
-#     user_id:str
 
 class PackageBooking(BaseModel):
     package_id: str= Field(...)
@@ -54,6 +42,7 @@ class PackageBooking(BaseModel):
     complete: bool= False
     payment: str
     booking_time: datetime
+    seats: int
 
 
 
@@ -61,10 +50,13 @@ class Package(BaseModel):
     venue_id: str= Field(...)
     name: str = Field(...)
     price: int = Field(...)
-    date_time: datetime
     valid: Optional[bool] = True
     description: str = Field(...)
-    points: int = 0
+    seats_per_day: int
+    start_time: datetime
+    end_time: datetime
+    booking_cost: float
+    reward_points: int
 
 
 
@@ -155,8 +147,12 @@ async def add_package(db,package: CreatePackageSchema,user_id):
         venue_id= venue['_id'],
         name= package.name,
         price= package.price,
-        date_time= package.date_time,
         description= package.description,
+        seats_per_day= package.seats_per_day,
+        start_time= package.start_time,
+        end_time= package.end_time,
+        booking_cost= package.booking_cost,
+        reward_points= package.booking_cost,
     )
     encoded = jsonable_encoder(pkg)
     await db[package_collection_name].insert_one(encoded)
@@ -274,20 +270,43 @@ async def book_package(db,user,booking: BookPackageSchema):
     package= await db[package_collection_name].find_one({"_id": booking.package})
     if package is None:
         raise HTTPException(status_code=404, detail=f"Package not found")
+    start_date = datetime.fromisoformat(str(package['start_time'])).replace(tzinfo=timezone.utc)
+    end_date = datetime.fromisoformat(str(package['end_time'])).replace(tzinfo=timezone.utc)
+    date_to_check = datetime.fromisoformat(str(booking.booking_time)).replace(tzinfo=timezone.utc)
+    print(date_to_check.date())
+    if not start_date <= date_to_check <= end_date:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Cannot book on this date")
+    
+    booked_seats= await check_seats_on_date(db, date_to_check.date(), booking.package)
+    if (package['seats_per_day']- booked_seats)< booking.seats:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Seats packed")
     payment_details= await complete_booking_payment(db, package['venue_id'], booking.package,booking.payment, user)
+
     booking= PackageBooking(
         package_id= booking.package,
         venue_id= package['venue_id'],
         user_id= user,
-        complete= True,
+        complete= False,
         payment= payment_details['_id'],
-        booking_time= datetime.now(),
+        booking_time= booking.booking_time,
+        seats= booking.seats,
+
     )
     book= await db[booking_collection_name].insert_one(jsonable_encoder(booking))
     await update_points(db, user, payment_details['amount_paid_in_rs']*0.1)
     return {'success': True}
 
+async def check_seats_on_date(db, book_date, package):
+    bookings= await db[booking_collection_name].find({'package_id': package},     ).to_list(10000)
+    booking_of_date=[]
+    for i in bookings:
+        if datetime.fromisoformat(i['booking_time']).replace(tzinfo=timezone.utc).date() ==book_date :
+            booking_of_date.append(i)
+    seats= sum([booking['seats'] for booking in booking_of_date])
+    return seats
+
 async def update_points(db, user, point_to_add):
+    print('--------------- ', user)
     point_detail= await db[points_collection_name].find_one({'user':user})
     point= point_detail['points']
     check= await db[points_collection_name].update_one({'user':user},{'$set': {'points': point+point_to_add}})

@@ -11,8 +11,12 @@ class CreateVenueSchema(BaseModel):
 class CreatePackageSchema(BaseModel):
     name: str = Field(...)
     price: int = Field(...)
-    date_time: datetime= Field(...)
     description: str = Field(...)
+    seats_per_day: int
+    start_time: datetime
+    end_time: datetime
+    booking_cost: float
+    reward_points: int
 
 class CreateScheduleSchema(BaseModel):
     artist: Optional[str]
@@ -52,3 +56,5 @@ class BookPackageSchema(BaseModel):
     package: str
     phone: int
     payment: PaymentSchema
+    booking_time: datetime= datetime.now()
+    seats: int
