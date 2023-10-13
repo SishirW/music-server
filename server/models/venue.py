@@ -6,9 +6,12 @@ from datetime import datetime, timezone
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid, shutil, os
-from server.schemas_new.venue import CreateReviewSchema,CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
+from server.schemas_new.venue import  CreateReviewSchema,CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
 from .venue_category import check_venuecategory_exists
 from .payment import complete_booking_payment
+import requests
+from .orders import khalti_url
+from .payment import AddBookingPayment
 collection_name= 'Venue'
 package_collection_name= 'Package'
 schedule_collection_name= 'VenueSchedule'
@@ -43,6 +46,7 @@ class PackageBooking(BaseModel):
     payment: str
     booking_time: datetime
     seats: int
+    phone_no:str
 
 
 
@@ -67,7 +71,9 @@ class Venue(BaseModel):
     category: List[str] = Field(...) 
     images: List[str]=[]
     is_featured: bool= False
-    is_verified: bool= False
+    is_verified: bool= True
+    menu: List[str]=[]
+    video: str= None
     user_id: str= Field(...)
     
 async def add_venue(db, venue, user):
@@ -266,22 +272,39 @@ async def get_venue_package_booking(db, package_id, user,page):
     reviews =await db[booking_collection_name].aggregate(pipeline).to_list(5)
     return reviews
 
-async def book_package(db,user,booking: BookPackageSchema):
-    package= await db[package_collection_name].find_one({"_id": booking.package})
-    if package is None:
+async def check_seat_available(db, package_id, booking_date, seats):
+    package= await db[package_collection_name].find_one({"_id": package_id})
+    if package is None or package['valid']== False:
         raise HTTPException(status_code=404, detail=f"Package not found")
     start_date = datetime.fromisoformat(str(package['start_time'])).replace(tzinfo=timezone.utc)
     end_date = datetime.fromisoformat(str(package['end_time'])).replace(tzinfo=timezone.utc)
-    date_to_check = datetime.fromisoformat(str(booking.booking_time)).replace(tzinfo=timezone.utc)
-    print(date_to_check.date())
+    date_to_check = datetime.fromisoformat(str(booking_date)).replace(tzinfo=timezone.utc)
     if not start_date <= date_to_check <= end_date:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Cannot book on this date")
+        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f"Cannot book on this date")
+    booked_seats= await check_seats_on_date(db, date_to_check.date(), package_id)
+    print(booked_seats)
+    if (package['seats_per_day']- booked_seats)< seats:
+        raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail=f"Cannot book this number of seats")
+    return {'available': True}
     
-    booked_seats= await check_seats_on_date(db, date_to_check.date(), booking.package)
-    if (package['seats_per_day']- booked_seats)< booking.seats:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Seats packed")
-    payment_details= await complete_booking_payment(db, package['venue_id'], booking.package,booking.payment, user)
-
+async def book_package(db,user,booking: BookPackageSchema):
+    package= await db[package_collection_name].find_one({"_id": booking.package})
+    if package is None or package['valid']== False:
+        raise HTTPException(status_code=404, detail=f"Package not found")
+    
+    payload = {
+        'token': booking.payment.khalti_token,
+        'amount': booking.payment.amount
+        }
+    headers = {
+        'Authorization': 'Key test_secret_key_a290c9bfc87a4c3f9016af3055f3e882'
+    }
+    
+    response = requests.request("POST", khalti_url, headers=headers, data=payload)
+    if response.status_code== 200:
+        payment_details= await complete_booking_payment(db, package['venue_id'], booking.package,booking.payment, user) 
+    else:
+        raise HTTPException(status_code=response.status_code, detail= response.text)
     booking= PackageBooking(
         package_id= booking.package,
         venue_id= package['venue_id'],
@@ -290,11 +313,13 @@ async def book_package(db,user,booking: BookPackageSchema):
         payment= payment_details['_id'],
         booking_time= booking.booking_time,
         seats= booking.seats,
+        phone_no= booking.phone,
 
     )
     book= await db[booking_collection_name].insert_one(jsonable_encoder(booking))
     await update_points(db, user, package['reward_points'])
-    return {'success': True}
+    booking_details= await db[booking_collection_name].find_one(book.inserted_id)
+    return booking_details
 
 async def check_seats_on_date(db, book_date, package):
     bookings= await db[booking_collection_name].find({'package_id': package},     ).to_list(10000)
@@ -356,6 +381,15 @@ async def unverify_venue(db,id):
     print(result)
     return {"success":True}
 
+async def complete_booking(db,id, user):
+    venue= await get_venue_by_userid(db, user)
+    booking= await db[booking_collection_name].find_one({'_id': id})
+    if booking is None or booking['venue_id']!= venue['_id']:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Booking not found")
+    result= await db[booking_collection_name].update_one({'_id': id}, {'$set': {'complete': True}})
+    print(result)
+    return {"success":True}
+
 def get_pipeline(page):
     return [
         {
@@ -363,7 +397,27 @@ def get_pipeline(page):
                 "is_verified": True
             }
         },
-  
+  {
+            "$lookup": {
+                "from": "VenueReview",
+                "localField": "_id",
+                "foreignField": "venue",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },
   
   
   {
@@ -394,7 +448,27 @@ def get_search_pipeline(keyword, page):
   }
   },
   
-  
+  {
+            "$lookup": {
+                "from": "VenueReview",
+                "localField": "_id",
+                "foreignField": "venue",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },
   
   {
     "$sort":{
@@ -422,7 +496,27 @@ def get_category_pipeline(category, page):
                 "is_verified": True
             }
         },
-        
+      {
+            "$lookup": {
+                "from": "VenueReview",
+                "localField": "_id",
+                "foreignField": "venue",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },  
   
   {
     "$sort":{
@@ -454,6 +548,54 @@ def get_venue_detail_pipeline(id):
       "as": "package_details"
     }
   },
+
+  
+ {
+    "$unwind": {
+      "path": "$package_details",
+      "preserveNullAndEmptyArrays": True
+    }
+  },
+  {
+    "$match": {
+      "package_details.valid": True
+    }
+  },
+  {
+    "$group": {
+      "_id": "$_id",
+      "alias": {
+        "$first": "$alias"
+      },
+      "location": {
+        "$first": "$location"
+      },
+      "description": {
+        "$first": "$description"
+      },
+      "category": {
+        "$first": "$category"
+      },
+      "images": {
+        "$first": "$images"
+      },
+      "is_featured": {
+        "$first": "$is_featured"
+      },
+      "is_verified": {
+        "$first": "$is_verified"
+      },
+      "menu": {
+        "$first": "$menu"
+      },
+      "video": {
+        "$first": "$video"
+      },
+      "package_details": {
+        "$push": "$package_details"
+      }
+    }
+  },
   {
     "$lookup": {
       "from": "VenueSchedule",
@@ -462,6 +604,7 @@ def get_venue_detail_pipeline(id):
       "as": "schedule_details"
     }
   },
+  
 ]
 
 def get_venue_review_pipeline(id, page):

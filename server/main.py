@@ -84,3 +84,15 @@ async def root():
 @app.get("/media/{path}/{id}")
 async def get_media(id: str, path: str):
     return FileResponse(f'media/{path}/{id}')
+
+@app.get("/media_new/product/{path}/{id}")
+async def get_product_media(id: str, path: str):
+    return FileResponse(f'media_new/product/{path}/{id}')
+
+@app.get("/media_new/venue/{path}/{id}")
+async def get_venue_media(id: str, path: str):
+    return FileResponse(f'media_new/venue/{path}/{id}')
+
+@app.get("/media_new/artist/{path}/{id}")
+async def get_artist_media(id: str, path: str):
+    return FileResponse(f'media_new/artist/{path}/{id}')

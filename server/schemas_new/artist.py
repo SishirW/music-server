@@ -10,6 +10,7 @@ class CreateArtistSchema(BaseModel):
     location: str
     looking_for: List[str]=[]
     images: List[str]= Field(...)
+    video: Optional[str]
 
 class CreateScheduleSchema(BaseModel):
     venue: Optional[str]

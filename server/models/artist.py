@@ -13,6 +13,7 @@ from ..models.genres import check_genre_exists
 collection_name= 'Artist'
 schedule_collection_name= 'ArtistSchedule'
 follow_collection_name= 'ArtistFollow'
+skill_collection_name= 'Instruments'
 
 
 class Skill(BaseModel):
@@ -41,7 +42,7 @@ class Artist(BaseModel):
     images: List[str]=[]
     is_featured: bool= False
     location: str
-    #video: Optional[str]
+    video: str= ""
     user_id: str= Field(...)
 
 
@@ -56,7 +57,8 @@ async def add_artist(db, artist, user):
         user_id= user,
         location=artist.location,
         looking_for=artist.looking_for,
-        images= artist.images
+        images= artist.images,
+        video= artist.vide,
     )
     encoded = jsonable_encoder(artist1)
     await db[collection_name].insert_one(encoded)
@@ -68,6 +70,14 @@ async def get_artist_by_userid(db, id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"Artist not found!")
     return artist
+
+async def get_artist_info(db, id):
+    artist = await db[collection_name].find_one({"_id": id})
+    if artist is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Artist not found!")
+    return artist
+
 
 async def get_artist_byid(db, id, user_id):
     pipeline= get_artist_detail_pipeline(id, user_id) 
@@ -87,6 +97,11 @@ async def check_artist_exists(db, id):
   
 
 async def get_relevant_artist(db,page,genre, search, searchtype,user_id):
+    if searchtype==1 and search!=None:
+        skills = await db[skill_collection_name].find_one({'name': {
+                                                    "$regex": f".*{search}.*", '$options': 'i'}})
+        print(skills)
+        search= skills["_id"]
     if search != None:
         pipeline= get_search_pipeline(search, user_id, page, searchtype)  # 0 for search by name. 1 for search by instrument
         artist =await db[collection_name].aggregate(pipeline).to_list(5)
@@ -174,13 +189,15 @@ async def delete_schedule(db, schedule_id, user):
 
 async def follow_artist(db, user, follow: FollowArtistSchema):
     artist= await check_artist_exists(db, follow.artist)
+    if artist['user_id']== user:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cant follow yourself")
     query= {"$and": [
         {"artist": artist['user_id']},
         {"user": user}
     ]}
     check_followed= await db[follow_collection_name].find_one(query)
     if check_followed is not None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Already followed this artist")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Already followed this artist")
     follow= ArtistFollow(
         artist= artist['user_id'],
         user= user
@@ -192,7 +209,7 @@ async def follow_artist(db, user, follow: FollowArtistSchema):
 async def unfollow_artist(db, user, follow: FollowArtistSchema):
     artist= await check_artist_exists(db, follow.artist)
     query= {"$and": [
-        {"artist": follow.artist},
+        {"artist": artist['user_id']},
         {"user": user}
     ]}
     check_followed= await db[follow_collection_name].delete_one(query)
@@ -514,6 +531,14 @@ def get_artist_detail_pipeline(id,user_id):
     "foreignField": "user",
     "as": "artist_following"
   }
+  },
+  {
+    "$lookup": {
+      "from": "ArtistSchedule",
+      "localField": "_id",
+      "foreignField": "artist",
+      "as": "schedule_details"
+    }
   },
   {
   "$addFields": {

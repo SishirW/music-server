@@ -10,10 +10,16 @@ class BookingPayment(BaseModel):
     idx: str
     phone: str
     amount: int
-    amount_paid_in_rs: int
     package: str
     venue:str
     user_id:str
+
+class AddBookingPayment(BaseModel):
+    khalti_token: str
+    idx: str
+    phone: str
+    amount: int
+    package: str
 
 class OrderPayment(BaseModel):
     khalti_token: str

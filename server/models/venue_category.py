@@ -57,9 +57,8 @@ async def delete_venuecategory_by_id(db, id):
                             detail=f"venuecategory not found!")
 
 
-async def find_all_venuecategorys(db, page, limit):
-    venuecategorys = await db[collection_name].find().skip(
-        (page-1)*limit).limit(limit).to_list(limit+1)
+async def find_all_venuecategorys(db):
+    venuecategorys = await db[collection_name].find().to_list(10000)
     return venuecategorys
 
 

@@ -36,8 +36,8 @@ async def check_product_exists_in_cart(db ,product, user):
     cart = await db[collection_name].find_one({"product": product, "user":user})
     return cart
 
-async def get_relevant_cart(db,page, limit, user):   
-    pipeline= get_pipeline(user, page,limit)
+async def get_relevant_cart(db, user):   
+    pipeline= get_pipeline(user)
     cart =await db[collection_name].aggregate(pipeline).to_list(5)
     return cart
 
@@ -51,7 +51,7 @@ async def delete_cart(db, id, user):
     else:
         raise HTTPException(status_code=404, detail=f"cart not found")
 
-def get_pipeline(user_id, page, limit):
+def get_pipeline(user_id):
     return [
         {
   "$match": {
@@ -67,10 +67,5 @@ def get_pipeline(user_id, page, limit):
     }
   },
   
-  {
-    "$skip": (page-1)*5
-  },
-  {
-    "$limit": limit
-  }
+  
 ]

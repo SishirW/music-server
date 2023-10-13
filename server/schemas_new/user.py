@@ -4,7 +4,9 @@ from server.models.user import SocialMedia
 
 class EditUserSchema(BaseModel):
     full_name: Optional[str]
-    username: Optional[str]
+    #username: Optional[str]
+    location: Optional[str]
+    phone_no: Optional[str]
     social_links: Optional[SocialMedia]
 
 class CreateUserSchema(BaseModel):

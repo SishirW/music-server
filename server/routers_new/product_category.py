@@ -12,9 +12,9 @@ router = APIRouter(prefix="/productcategory", tags=["ProductCategory"])
 
 
 @router.get('/')
-async def get_productcategory(request: Request, page=1, limit=5, current_user: ShowUser = Depends(get_current_user)):
+async def get_productcategory(request: Request):
     db = get_database(request)
-    result = await find_all_productcategorys(db, int(page), int(limit))
+    result = await find_all_productcategorys(db)
     return jsonable_encoder(result)
 
 

@@ -16,14 +16,14 @@ async def add_to_cart(request: Request, cart: AddToCart, current_user: ShowUserW
 
 
 @router.get('/',)
-async def get_relevant_carts(request: Request, page: int = 1, limit: int=5, current_user: ShowUserWithId = Depends(get_current_user)):
+async def get_relevant_carts(request: Request, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
-    result = await get_relevant_cart(db,page, limit,current_user['_id'])
+    result = await get_relevant_cart(db,current_user['_id'])
     return jsonable_encoder(result)
 
 @router.delete('/', response_description='Delete artist schedule',status_code=status.HTTP_204_NO_CONTENT)
-async def delete_from_cart(request: Request, product_id: str, current_user: ShowUserWithId = Depends(get_current_user)):
+async def delete_from_cart(request: Request, id: str, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
-    result=await delete_cart(db, product_id, current_user['_id'])
+    result=await delete_cart(db, id, current_user['_id'])
     return jsonable_encoder(result)
 

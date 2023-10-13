@@ -12,9 +12,9 @@ router = APIRouter(prefix="/genres", tags=["Genres"])
 
 
 @router.get('/')
-async def get_genres(request: Request, page=1, limit=5, current_user: ShowUser = Depends(get_current_user)):
+async def get_genres(request: Request):
     db = get_database(request)
-    result = await find_all_genres(db, int(page), int(limit))
+    result = await find_all_genres(db)
     return jsonable_encoder(result)
 
 

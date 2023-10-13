@@ -77,8 +77,10 @@ async def get_relevant_product(db,page,category, search):
         pipeline= get_category_pipeline(category, page)  
         product =await db[collection_name].aggregate(pipeline).to_list(5)
     else:
-      product = await db[collection_name].find().skip(
-        (page-1)*5).limit(5).to_list(6)
+      pipeline= get_pipeline(page)  
+      product =await db[collection_name].aggregate(pipeline).to_list(5)
+    #   product = await db[collection_name].find().skip(
+    #     (page-1)*5).limit(5).to_list(6)
     return product
 
 
@@ -179,6 +181,38 @@ async def get_product_question(db, id,page):
     return questions
 
 
+def get_pipeline(page):    
+    return [
+        {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },
+        {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+    ]
+
+
 def get_search_pipeline(keyword, page):    
     return [
       {
@@ -190,7 +224,27 @@ def get_search_pipeline(keyword, page):
   }
   },
   
-  
+  {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews" 
+        },
   
   {
   "$skip": (page-1)*5
@@ -212,7 +266,27 @@ def get_category_pipeline(category, page):
                
             }
         },
-        
+        {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews" 
+        },
   
   {
   "$skip": (page-1)*5

@@ -13,8 +13,8 @@ class PaymentSchema(BaseModel):
     idx: str
     phone: str
     amount: float
-    order: str
+    #order: str
 class PlaceOrder(BaseModel):
     products: List[Product] 
     type: int
-    payment: PaymentSchema= None
+    payment: Optional[PaymentSchema]

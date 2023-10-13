@@ -12,9 +12,9 @@ router = APIRouter(prefix="/venuecategory", tags=["VenueCategory"])
 
 
 @router.get('/')
-async def get_venuecategory(request: Request, page=1, limit=5, current_user: ShowUser = Depends(get_current_user)):
+async def get_venuecategory(request: Request):
     db = get_database(request)
-    result = await find_all_venuecategorys(db, int(page), int(limit))
+    result = await find_all_venuecategorys(db)
     return jsonable_encoder(result)
 
 

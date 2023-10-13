@@ -1,14 +1,26 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
 from datetime import datetime, timedelta
-from ..schemas import Token, TokenData
 from ..utils.password_methods import verify_password
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from ..routers.user import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from ..routers.user import randomDigits
 from ..routers.user import send_email
-
+from pydantic import BaseModel, Field
 router = APIRouter(tags=['Authentication'])
 
+class UserDetail(BaseModel):
+    id: str= Field(alias='_id')
+    username: str
+    email: str
+    full_name: str
+    type: str
+    location: str
+    phone_no: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user_info: UserDetail
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(request: Request, background_tasks: BackgroundTasks, form_data: OAuth2PasswordRequestForm = Depends()):

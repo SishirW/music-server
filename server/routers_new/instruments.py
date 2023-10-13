@@ -12,9 +12,9 @@ router = APIRouter(prefix="/instruments", tags=["Instruments"])
 
 
 @router.get('/')
-async def get_instruments(request: Request, page=1, limit=5, current_user: ShowUser = Depends(get_current_user)):
+async def get_instruments(request: Request):
     db = get_database(request)
-    result = await find_all_insturments(db, int(page), int(limit))
+    result = await find_all_insturments(db)
     return jsonable_encoder(result)
 
 

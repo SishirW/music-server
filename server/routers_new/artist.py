@@ -3,7 +3,7 @@ from ..utils.user import validate_artist, get_current_user,validate_user_without
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.artist import CreateArtistSchema, CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema
 from server.db import get_database
-from server.models.artist import feature_artist,unfeature_artist,add_artist,get_follower,get_following,get_followers_count,unfollow_artist,follow_artist,edit_schedule,delete_schedule, add_schedule,get_artist_by_userid, Artist, get_artist_byid, get_featured_artist, get_relevant_artist,add_images
+from server.models.artist import get_artist_info,feature_artist,unfeature_artist,add_artist,get_follower,get_following,get_followers_count,unfollow_artist,follow_artist,edit_schedule,delete_schedule, add_schedule,get_artist_by_userid, Artist, get_artist_byid, get_featured_artist, get_relevant_artist,add_images
 from server.schemas import ShowUserWithId
 from typing import List
 
@@ -80,7 +80,7 @@ async def get_artist_by_user_id(id: str, request: Request):
 @router.put('/images', response_description='Update artist image')
 async def add_artist_images(request: Request, files: List[UploadFile],id: str):
     db = get_database(request)
-    artist=await get_artist_byid(db,id)
+    artist=await get_artist_info(db,id)
     result = await add_images(db, id,files)
     return jsonable_encoder(result)
 
