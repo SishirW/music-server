@@ -5,14 +5,18 @@ from .bands import Location
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException,status
-from ..password_methods import get_password_hash
+from ..utils.password_methods import get_password_hash
+from ..utils.user import randomDigits, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, timedelta
+
 
 
 collection_name = "Users"
+verification_collection_name= "VerificationToken"
 
-class ValidationToken(BaseModel):
-    number: int
-    created_at: datetime
+class VerificationToken(BaseModel):
+    token: int
+    user: str
+    valid: bool= True
 
 class UserType(BaseModel):
     typeName: str
@@ -34,7 +38,7 @@ class User(BaseModel):
     username: str = Field(...)
     email: EmailStr = Field(...)
     password: str = Field(...)
-    verified: bool = True
+    verified: bool = False
     type: str= 'user'
     location: Optional[str] = ''
     phone_no: Optional[str] = ''
@@ -61,11 +65,59 @@ async def create_user(db, user):
     )
     encoded = jsonable_encoder(user1)
     print(encoded)
-    await db[collection_name].insert_one(encoded)
+    user_entry= await db[collection_name].insert_one(encoded)
+    await add_verification_token(db, user_entry.inserted_id, randomDigits(5))
     # new_user = await find_band_by_id(db, str(bnd.id), user)
     # return new_band
     return {'success': True}
 
+
+async def add_verification_token(db, user, token):
+    user1 =VerificationToken(
+        token= token, 
+        user= user
+    )
+    encoded = jsonable_encoder(user1)
+    print(encoded)
+    await db[verification_collection_name].insert_one(encoded)
+    return True
+
+async def verify_user(db, user, token):
+    user_check= await find_user_by_id(db ,user)
+    if user_check is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f'user not found!')
+    if user_check['verified']== True:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot verify',)
+    token_detail = await db[verification_collection_name].find_one({'token': token, 'user':user})
+    if token_detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f'token not found!')
+    difference_in_hour= calculate_difference_in_hour(datetime.strptime(token_detail['created_at'], '%Y-%m-%dT%H:%M:%S.%f'))
+
+    if token== token_detail['token'] and token_detail['valid']:
+        if difference_in_hour < 2: 
+            r = await db[collection_name].update_one({'_id': user}, {'$set': {'verified': True}})
+            return get_login_token_after_verification(user_check)
+        await db[verification_collection_name].update_one({'_id': token_detail['_id']}, {'$set': {'valid': 'False'}})
+    raise HTTPException(
+                    status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="Expired code",) 
+
+    
+def get_login_token_after_verification(user):
+    access_token_expires = timedelta(days=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+    data={"sub": user['username']}, expires_delta=access_token_expires)
+    return {"access_token": access_token, "token_type": "bearer", "user_info": user}
+
+    
+
+def calculate_difference_in_hour(time):
+    difference = datetime.now() - time
+    difference_in_hour = difference.total_seconds() / 3600
+    return difference_in_hour
+    
 
 async def find_user_by_id(db, id):
     user = await db[collection_name].find_one({"_id": id})
@@ -117,53 +169,3 @@ async def edit_user_details(db, id,user_info):
 
     raise HTTPException(status_code=404, detail=f"User with id {id} not found")
 
-def verify_user():
-    pass
-
-
-def get_user_by_username():
-    pass
-
-def get_user_by_email():
-    pass
-
-# def check_is_artist():
-#     pass
-# def check_is_venue():
-#     pass
-
-def validate_seller():
-    pass
-
-def validate_artist():
-    pass
-
-def validate_venue():
-    pass
-
-def validate_user():
-    pass
-
-def validate_admin():
-    pass
-
-
-# def edit_user_details():
-#     pass
-
-def get_users():  #Admin
-    pass
-
-def delete_user():
-    pass
-
-
-def get_bookings_detail():
-    pass
-
-
-def add_device():
-    pass
-
-def remove_device():
-    pass

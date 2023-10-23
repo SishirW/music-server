@@ -6,7 +6,7 @@ from typing import Union, List
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from ..schemas import CreateUser, ShowUser, ShowUserType, ShowUserDetailsAdmin, ShowUserWithId, TokenData, Token, EditUserAdditionalDetails, GetAdditionalDetails, ShowUserDetails, ShowUserWithDetails
-from ..password_methods import get_password_hash
+from ..utils.password_methods import get_password_hash
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import random
 import smtplib

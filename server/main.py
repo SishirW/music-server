@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from server.routers import  user, auth, venues, cart, orders, artist, packages, grow, used_products, repair, ads
-from server.routers_new import instruments, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
+from server.routers import   venues, cart, orders, artist, packages, grow, used_products, repair, ads
+from server.routers_new import orders,user,auth, instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from starlette.middleware.cors import CORSMiddleware
@@ -41,9 +41,11 @@ async def start_database():
 async def shutdown_db_client():
     app.mongodb_client.close()
 
+app.include_router(orders.router)
 app.include_router(products.router)
 
 app.include_router(product_category.router)
+app.include_router(cart.router)
 # For band
 app.include_router(bands.router)
 app.include_router(instruments.router)
@@ -82,3 +84,15 @@ async def root():
 @app.get("/media/{path}/{id}")
 async def get_media(id: str, path: str):
     return FileResponse(f'media/{path}/{id}')
+
+@app.get("/media_new/product/{path}/{id}")
+async def get_product_media(id: str, path: str):
+    return FileResponse(f'media_new/product/{path}/{id}')
+
+@app.get("/media_new/venue/{path}/{id}")
+async def get_venue_media(id: str, path: str):
+    return FileResponse(f'media_new/venue/{path}/{id}')
+
+@app.get("/media_new/artist/{path}/{id}")
+async def get_artist_media(id: str, path: str):
+    return FileResponse(f'media_new/artist/{path}/{id}')

@@ -57,9 +57,8 @@ async def delete_instrument_by_id(db, id):
                             detail=f"Instrument not found!")
 
 
-async def find_all_insturments(db, page, limit):
-    insturments = await db[collection_name].find().skip(
-        (page-1)*limit).limit(limit).to_list(limit+1)
+async def find_all_insturments(db):
+    insturments = await db[collection_name].find().to_list(10000)
     return insturments
 
 

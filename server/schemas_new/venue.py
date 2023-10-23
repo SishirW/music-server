@@ -1,5 +1,5 @@
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr,Field
+from pydantic import BaseModel,Field
 from datetime import datetime
 
 class CreateVenueSchema(BaseModel):
@@ -7,12 +7,18 @@ class CreateVenueSchema(BaseModel):
     location: str= Field(...)
     description: str= Field(...)
     category: List[str]= Field(...)
+    menu: List[str]= Field(...)
+    video: str= None
 
 class CreatePackageSchema(BaseModel):
     name: str = Field(...)
     price: int = Field(...)
-    date_time: datetime= Field(...)
     description: str = Field(...)
+    seats_per_day: int
+    start_time: datetime
+    end_time: datetime
+    booking_cost: float
+    reward_points: int
 
 class CreateScheduleSchema(BaseModel):
     artist: Optional[str]
@@ -48,7 +54,16 @@ class PaymentSchema(BaseModel):
     user_id:str
 
 
+class AddBookingPaymentSchema(BaseModel):
+    khalti_token: str
+    idx: str
+    phone: str
+    amount: int
+
 class BookPackageSchema(BaseModel):
     package: str
     phone: int
-    payment: PaymentSchema
+    payment: AddBookingPaymentSchema
+    booking_time: datetime= datetime.now()
+    seats: int
+

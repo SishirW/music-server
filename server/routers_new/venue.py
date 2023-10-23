@@ -1,17 +1,18 @@
 from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
 from typing import List
+from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.venue import CreateVenueSchema,CreateReviewSchema, CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
-from server.routers.user import validate_user, validate_venue, validate_admin
+from ..utils.user import get_current_user, validate_venue, validate_admin
 from server.schemas import ShowUserWithId
 from server.db import get_database
-from server.models.venue import get_venue_package_booking,get_venue_review,add_review,delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
+from server.models.venue import complete_booking,check_seat_available,get_venue_package_booking,get_venue_review,add_review,delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
 
 router = APIRouter(prefix="/venue", tags=["Venue"])
 
 
 @router.post('/')
-async def add_new_venue(request: Request, venue: CreateVenueSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_new_venue(request: Request, venue: CreateVenueSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_venue(db, venue,current_user['_id'])
     return jsonable_encoder(result)
@@ -24,7 +25,7 @@ async def add_new_package(request: Request, package: CreatePackageSchema, curren
 
 
 @router.post('/booking')
-async def book_packages(request: Request,booking: BookPackageSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def book_packages(request: Request,booking: BookPackageSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await book_package(db, current_user['_id'],booking)
     return jsonable_encoder(result)
@@ -37,7 +38,7 @@ async def add_new_schedule(request: Request, schedule: CreateScheduleSchema, cur
     return jsonable_encoder(result)
 
 @router.post('/review')
-async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_review(db, review, current_user['_id'])
     return jsonable_encoder(result)
@@ -73,6 +74,11 @@ async def get_venue_package_bookings(request: Request, package_id:str,page: int 
     result = await get_venue_package_booking(db,package_id,current_user['_id'],page)
     return jsonable_encoder(result)
 
+@router.get('/packageavailable')
+async def check_package_seat_availability(request: Request, package: str, booking_date: datetime, seats: int, current_user: ShowUserWithId = Depends(get_current_user)):
+    db = get_database(request)
+    result = await check_seat_available(db,package, booking_date, seats)
+    return jsonable_encoder(result)
 
 @router.get('/{id}')
 async def get_venue_by_id(id: str, request: Request):
@@ -129,6 +135,12 @@ async def verify_venues(request: Request, id:str, current_user: ShowUserWithId =
 async def unverify_venues(request: Request, id:str, current_user: ShowUserWithId = Depends(validate_admin)):
     db = get_database(request)
     result=await unverify_venue(db,id)
+    return jsonable_encoder(result)
+
+@router.put('/complete_booking',response_description='Feature venue')
+async def complete_package_booking(request: Request,booking_id: str, current_user: ShowUserWithId = Depends(validate_venue)):
+    db = get_database(request)
+    result=await complete_booking(db,booking_id, current_user['_id'])
     return jsonable_encoder(result)
 
 @router.delete('/package', response_description='Delete venue package',status_code=status.HTTP_204_NO_CONTENT)

@@ -3,7 +3,7 @@ from typing import List
 from fastapi.encoders import jsonable_encoder
 from server.db import get_database
 from server.schemas_new.products import CreateProductSchema,EditProductSchema, CreateReviewSchema, CreateQuestionSchema, CreateQuestionResponseSchema
-from server.routers.user import validate_user, validate_admin
+from ..utils.user import get_current_user, validate_admin
 from server.schemas import ShowUserWithId
 from server.models.products import get_product_question,add_response_to_qn,add_question,get_product_review,add_review,add_product, edit_product, delete_product,add_images,get_product_byid,get_relevant_product
 router = APIRouter(prefix="/product", tags=["Product"])
@@ -17,13 +17,13 @@ async def add_new_product(request: Request, product: CreateProductSchema, curren
     return jsonable_encoder(result)
 
 @router.post('/review')
-async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_review(db, review, current_user['_id'])
     return jsonable_encoder(result)
 
 @router.post('/question')
-async def add_new_question(request: Request,question: CreateQuestionSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_new_question(request: Request,question: CreateQuestionSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_question(db, question, current_user['_id'])
     return jsonable_encoder(result)
@@ -59,7 +59,7 @@ async def edit_products(request: Request, product: EditProductSchema, id: str, c
     return jsonable_encoder(result)
 
 @router.put('/response_to_qn', response_description='Update product question')
-async def add_response_to_qns(request: Request, question: CreateQuestionResponseSchema, current_user: ShowUserWithId = Depends(validate_user)):
+async def add_response_to_qns(request: Request, question: CreateQuestionResponseSchema, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result=await add_response_to_qn(db, question, current_user["_id"])
     return jsonable_encoder(result)

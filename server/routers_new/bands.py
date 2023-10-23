@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from server.schemas import ShowUser
-from server.routers.user import validate_artist, validate_admin
+from ..utils.user import validate_artist, validate_admin
 from server.schemas_new.bands import AddBandSchema
 from server.models.bands import add_new_band, find_all_bands, get_total_band_count, find_band_by_id, delete_band_by_id, find_all_bands_for_a_user
 from fastapi.encoders import jsonable_encoder

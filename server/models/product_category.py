@@ -57,9 +57,8 @@ async def delete_productcategory_by_id(db, id):
                             detail=f"productcategory not found!")
 
 
-async def find_all_productcategorys(db, page, limit):
-    productcategorys = await db[collection_name].find().skip(
-        (page-1)*limit).limit(limit).to_list(limit+1)
+async def find_all_productcategorys(db):
+    productcategorys = await db[collection_name].find().to_list(10000)
     return productcategorys
 
 

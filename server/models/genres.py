@@ -57,9 +57,8 @@ async def delete_genre_by_id(db, id):
                             detail=f"genre not found!")
 
 
-async def find_all_genres(db, page, limit):
-    genres = await db[collection_name].find().skip(
-        (page-1)*limit).limit(limit).to_list(limit+1)
+async def find_all_genres(db):
+    genres = await db[collection_name].find().to_list(10000)
     return genres
 
 
