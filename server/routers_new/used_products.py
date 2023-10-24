@@ -63,7 +63,7 @@ async def get_product_by_id(id: str, request: Request):
     return jsonable_encoder(result)
 
 @router.put('/images', response_description='Update used product image')
-async def add_product_images(request: Request, files: List[UploadFile],id: str,current_user: ShowUserWithId = Depends(get_current_user)):
+async def add_product_images(request: Request, files: List[UploadFile],id: str):
     db = get_database(request)
     result = await add_images(db, id,files)
     return jsonable_encoder(result)

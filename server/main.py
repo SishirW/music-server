@@ -131,3 +131,7 @@ async def get_advertisments_media(id: str):
 @app.get("/media_new/repair/{path}/{id}")
 async def get_repair_media(id: str, path: str):
     return FileResponse(f'media_new/repair/{path}/{id}')
+
+@app.get("/media_new/used_product/{path}/{id}")
+async def get_repair_media(id: str, path: str):
+    return FileResponse(f'media_new/used_product/{path}/{id}')

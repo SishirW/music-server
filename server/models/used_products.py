@@ -35,6 +35,7 @@ class UsedProductRequest(BaseModel):
     phone_no: int
     location: str
     user: str
+    seller: str
 
 async def add_product(db, product, user):
     category= [x for x in product.category if await check_productcategory_exists(x,db)]
@@ -111,14 +112,15 @@ async def add_question(db, question: CreateQuestionSchema, user):
     return {'success': True}
 
 async def request_for_buying(db, buying: RequestToBuy, user):
-    product= await check_product_exists(db, buying.product_id)
+    product= await get_product_byid(db, buying.product_id)
 
     question= UsedProductRequest(
         product=buying.product_id,
         name= buying.name,
         phone_no= buying.phone_no,
         location= buying.location,
-        user= user
+        user= user,
+        seller= product['user']
     )
     encoded = jsonable_encoder(question)
     await db[request_collection_name].insert_one(encoded)
@@ -234,8 +236,17 @@ def get_product_request_pipeline(id, page):
       "as": "user_details"
     }
         },
-        
-        
+
+        {
+    "$lookup": {
+      "from": "Users",
+      "localField": "seller",
+      "foreignField": "_id",
+      "as": "seller_details"
+    }
+        }, 
+
+    
         
   {
   "$skip": (page-1)*20
