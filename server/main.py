@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from server.routers import   venues, cart, orders, artist, packages, used_products
-from server.routers_new import repair,grow,ads,orders,user,auth, instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
+from server.routers import   venues, cart, orders, artist, packages
+from server.routers_new import used_products,repair,grow,ads,orders,user,auth, instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
 from motor.motor_asyncio import AsyncIOMotorClient
 from tempfile import NamedTemporaryFile
 from starlette.middleware.cors import CORSMiddleware
@@ -44,6 +44,7 @@ async def start_database():
 async def shutdown_db_client():
     app.mongodb_client.close()
 
+app.include_router(used_products.router)
 app.include_router(repair.router)
 
 app.include_router(grow.router)
@@ -67,7 +68,7 @@ app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(artist.router)
 # Products and Repairs
-app.include_router(used_products.router)
+
 # app.include_router(musical_products.router)
 #app.include_router(venues.router)
 # Orders
