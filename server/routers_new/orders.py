@@ -4,7 +4,7 @@ from fastapi.encoders import jsonable_encoder
 from server.db import get_database
 from ..utils.user import  validate_admin, get_current_user
 from server.schemas import ShowUserWithId
-from server.models.orders import place_order, get_relevant_order, change_order_status
+from server.models.orders import place_order, get_relevant_order, change_order_status, get_user_order
 from server.schemas_new.orders import PlaceOrder
 router = APIRouter(prefix="/order", tags=["Order"])
 @router.post('/')
@@ -19,6 +19,12 @@ async def get_relevant_orders(request: Request,status: int=0, page: int = 1, lim
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
     db = get_database(request)
     result = await get_relevant_order(db,status,page, limit)
+    return jsonable_encoder(result)
+
+@router.get('/user_orders')
+async def get_user_orders(request: Request,type: int=0, page: int = 1, limit: int=20,current_user: ShowUserWithId = Depends(get_current_user)):
+    db = get_database(request)
+    result = await get_user_order(db,type, page, limit, current_user['_id'])
     return jsonable_encoder(result)
 
 

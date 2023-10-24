@@ -1,15 +1,16 @@
 from . import BaseModel
 from typing import List, Optional
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, HttpUrl
 from .bands import Location
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid
 import shutil,os
-from server.schemas_new.artist import CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema
+from server.schemas_new.artist import CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema, EditArtistSchema, EditSocialMedia
 from ..models.instuments import check_instrument_exists
 from ..models.genres import check_genre_exists
+from .venue import SocialMedia, social_media_collection_name, user_collection_name
 collection_name= 'Artist'
 schedule_collection_name= 'ArtistSchedule'
 follow_collection_name= 'ArtistFollow'
@@ -42,13 +43,23 @@ class Artist(BaseModel):
     images: List[str]=[]
     is_featured: bool= False
     location: str
-    video: str= ""
+    video: HttpUrl= None
     user_id: str= Field(...)
+    social_accounts: str
 
 
 async def add_artist(db, artist, user):
     skills= [x for x in artist.skills if await check_instrument_exists(x,db)]
     genre= [x for x in artist.genre if await check_genre_exists(x,db)]
+    social= SocialMedia(
+        facebook= artist.social_media.facebook,
+        instagram= artist.social_media.instagram,
+        youtube= artist.social_media.youtube,
+        tiktok= artist.social_media.tiktok,
+    )
+    social_encoded= jsonable_encoder(social)
+    social_media_detail= await db[social_media_collection_name].insert_one(social_encoded)
+    social_media_id= social_media_detail.inserted_id
     artist1 = Artist(
         alias= artist.alias,
         description= artist.description,
@@ -57,12 +68,64 @@ async def add_artist(db, artist, user):
         user_id= user,
         location=artist.location,
         looking_for=artist.looking_for,
-        images= artist.images,
-        video= artist.vide,
+        video= artist.video,
+        social_accounts= social_media_id
     )
     encoded = jsonable_encoder(artist1)
-    await db[collection_name].insert_one(encoded)
+    insert_artist= await db[collection_name].insert_one(encoded)
+    detail= await db[collection_name].find_one({'_id': insert_artist.inserted_id})
+    return detail
     return {'success': True}
+
+async def edit_artist(db,artist: EditArtistSchema, user):
+    artist = {k: v for k, v in artist.dict().items() if v is not None}
+    artist_check= await db[collection_name].find_one({'user_id': user})
+    if artist_check is None:
+        raise HTTPException(status_code=404, detail=f"artist not found")
+    artist_id= artist_check['_id']
+    if len(artist) >= 1:
+
+        update_result = await db[collection_name].update_one(
+            {"_id": artist_id}, {"$set": artist}
+        )
+
+        if update_result.modified_count == 1:
+            if (
+                updated_artist := await db[collection_name].find_one({"_id": artist_id})
+            ) is not None:
+                return updated_artist
+
+    if (
+        existing_artist := await db[collection_name].find_one({"_id": artist_id})
+    ) is not None:
+        return existing_artist
+
+    raise HTTPException(status_code=404, detail=f"Artist with id {artist_id} not found")
+
+async def edit_social_media(db,artist: EditSocialMedia, user):
+    artist = {k: v for k, v in artist.dict().items() if v is not None}
+    artist_check= await db[collection_name].find_one({'user_id': user})
+    if artist_check is None:
+        raise HTTPException(status_code=404, detail=f"artist not found")
+    social_id= artist_check['social_accounts']
+    if len(artist) >= 1:
+
+        update_result = await db[social_media_collection_name].update_one(
+            {"_id": social_id}, {"$set": artist}
+        )
+
+        if update_result.modified_count == 1:
+            if (
+                updated_artist := await db[social_media_collection_name].find_one({"_id": social_id})
+            ) is not None:
+                return updated_artist
+
+    if (
+        existing_artist := await db[social_media_collection_name].find_one({"_id": social_id})
+    ) is not None:
+        return existing_artist
+
+    raise HTTPException(status_code=404, detail=f"Social Media with id {social_id} not found")
 
 async def get_artist_by_userid(db, id):
     artist = await db[collection_name].find_one({"user_id": id})
@@ -145,6 +208,12 @@ async def add_schedule(db,schedule: CreateScheduleSchema,user_id):
     await db[schedule_collection_name].insert_one(encoded)
     return {'success': True}
 
+async def get_artist_schedule(db,page,limit,user):  
+    artist= await get_artist_by_userid(db, user)
+    schedule= await db[schedule_collection_name].find({'artist': artist['_id']}).skip((page-1)*limit).limit(limit).to_list(limit+1)
+    return schedule
+
+
 async def check_schedule_belongs_to_artist(db,schedule_id, user_id):
     schedule= await db[schedule_collection_name].find_one({"_id": schedule_id})
     if schedule is None:
@@ -186,6 +255,31 @@ async def delete_schedule(db, schedule_id, user):
         return {f"Successfully deleted schedule"}
     else:
         raise HTTPException(status_code=404, detail=f"schedule not found")
+
+
+async def delete_images(db, id, files):
+    empty=[]
+    for image in files:
+        update_result= await db[collection_name].update_one({'_id': id}, {'$pull': {'images': image}})
+        if update_result.modified_count == 0:
+            empty.append(image)
+    if len(empty) == 0:
+        return {"detail": "Successfully deleted image", "not_found": []}
+    else:
+        return {"detail": "Some images were missing", "not_found": empty}
+
+async def delete_artist(db, id):
+    check= await check_artist_exists(db, id)
+
+    if not check:
+        raise HTTPException(status_code=404, detail=f"Artist not found")
+    artist= await db[collection_name].find_one({'_id': id})
+    deleted_artist=await db[collection_name].delete_one({'_id': id})
+    await db[user_collection_name].update_one({"_id": artist['user_id']}, {"$set": {'type': 'user'}})
+    if deleted_artist.deleted_count == 1:
+        return {f"Successfully deleted artist"}
+    else:
+        raise HTTPException(status_code=404, detail=f"Package not artist")
 
 async def follow_artist(db, user, follow: FollowArtistSchema):
     artist= await check_artist_exists(db, follow.artist)
@@ -538,6 +632,15 @@ def get_artist_detail_pipeline(id,user_id):
       "localField": "_id",
       "foreignField": "artist",
       "as": "schedule_details"
+    }
+
+  },
+  {
+    "$lookup": {
+      "from": "SocialMedia",
+      "localField": "social_accounts",
+      "foreignField": "_id",
+      "as": "social_accounts"
     }
   },
   {

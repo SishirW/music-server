@@ -28,6 +28,7 @@ class Orders(BaseModel):
 
 
 async def place_order(db, order: PlaceOrder, user):
+    
     products= [x for x in order.products if await check_product(db, x.product)]
     product_ids= []
     for i in products:
@@ -77,8 +78,19 @@ async def get_relevant_order(db,status ,page, limit):
     order =await db[collection_name].aggregate(pipeline).to_list(5)
     return order
 
+async def get_user_order(db,type ,page, limit, user):
+    pipeline= get_user_current_pipeline(page, limit, user, [0, 1])
+    if type!=0:
+        pipeline= get_user_history_pipeline(page, limit, user, [2, 3])
+    order =await db[collection_name].aggregate(pipeline).to_list(5)
+    return order
+
 
 async def change_order_status(db, id,type):
+    detail = await db[collection_name].find_one({'_id': id})
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Order not found!")
     await db[collection_name].update_one({'_id':id}, {'$set':{'status': type}})
     return {'success':True}
 
@@ -101,6 +113,22 @@ def get_pipeline(page, limit, type):
       "as": "product_detail"
     }
   },
+    {
+    "$lookup": {
+      "from": "Users",
+      "localField": "user",
+      "foreignField": "_id",
+      "as": "user_detail"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "ProductTransaction",
+      "localField": "payment",
+      "foreignField": "_id",
+      "as": "payment_detail"
+    }
+  },
   
   {
     "$skip": (page-1)*5
@@ -110,3 +138,55 @@ def get_pipeline(page, limit, type):
   }
 ]
 
+def get_user_current_pipeline(page, limit, user, status_values):
+    return [
+            {
+    "$match": {
+        "user":  user,
+        "status": {"$in": status_values}
+
+    },
+            },
+  {
+    "$lookup": {
+      "from": "Products",
+      "localField": "products.product",
+      "foreignField": "_id",
+      "as": "product_detail"
+    }
+  },
+  
+]
+
+
+def get_user_history_pipeline(page, limit, user, status_values):
+    return [
+            {
+    "$match": {
+        "user":  user,
+        "status": {"$in": status_values}
+
+    },
+    
+            },
+            {
+        "$sort": {"created_at": -1}
+    },
+  {
+    "$lookup": {
+      "from": "Products",
+      "localField": "products.product",
+      "foreignField": "_id",
+      "as": "product_detail"
+    }
+  },
+  
+  
+  {
+    "$skip": (page-1)*5
+  },
+  {
+    "$limit": limit
+  },
+  
+]

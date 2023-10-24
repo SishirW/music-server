@@ -5,7 +5,7 @@ from server.db import get_database
 from server.schemas_new.products import CreateProductSchema,EditProductSchema, CreateReviewSchema, CreateQuestionSchema, CreateQuestionResponseSchema
 from ..utils.user import get_current_user, validate_admin
 from server.schemas import ShowUserWithId
-from server.models.products import get_product_question,add_response_to_qn,add_question,get_product_review,add_review,add_product, edit_product, delete_product,add_images,get_product_byid,get_relevant_product
+from server.models.products import delete_images, get_product_question,add_response_to_qn,add_question,get_product_review,add_review,add_product, edit_product, delete_product,add_images,get_product_byid,get_relevant_product
 router = APIRouter(prefix="/product", tags=["Product"])
 
 
@@ -52,7 +52,7 @@ async def get_product_by_id(id: str, request: Request):
     result = await get_product_byid(db, id)
     return jsonable_encoder(result)
 
-@router.put('/', response_description='Update product product')
+@router.put('/', response_description='Update product')
 async def edit_products(request: Request, product: EditProductSchema, id: str, current_user: ShowUserWithId = Depends(validate_admin)):
     db = get_database(request)
     result=await edit_product(db,id, product)
@@ -66,10 +66,17 @@ async def add_response_to_qns(request: Request, question: CreateQuestionResponse
 
 
 @router.put('/images', response_description='Update product image')
-async def add_product_images(request: Request, files: List[UploadFile],id: str):
+async def add_product_images(request: Request, files: List[UploadFile],id: str,current_user: ShowUserWithId = Depends(validate_admin)):
     db = get_database(request)
     product=await get_product_byid(db,id)
     result = await add_images(db, id,files)
+    return jsonable_encoder(result)
+
+@router.delete('/images', response_description='Update product image')
+async def delete_product_images(request: Request, files: List[str],id: str,current_user: ShowUserWithId = Depends(validate_admin)):
+    db = get_database(request)
+    product=await get_product_byid(db,id)
+    result = await delete_images(db, id,files)
     return jsonable_encoder(result)
 
 @router.delete('/{id}', response_description='Delete product package',status_code=status.HTTP_204_NO_CONTENT)

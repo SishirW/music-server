@@ -7,7 +7,7 @@ class CreateProductSchema(BaseModel):
     price: float= Field(...)
     description: str= Field(...)
     category: List[str]= Field(...)
-    images: List[str]= Field(...)
+    #images: List[str]= Field(...)
     points: int= Field(...)
 
 class EditProductSchema(BaseModel):

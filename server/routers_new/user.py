@@ -1,7 +1,7 @@
 from fastapi import Request, HTTPException,APIRouter,status,Depends
 from fastapi.encoders import jsonable_encoder
-from server.schemas_new.user import CreateUserSchema, EditUserSchema
-from server.models.user import verify_user,create_user, find_user_by_id, find_user_by_email, find_user_by_username,delete_user_by_id,edit_user_details
+from server.schemas_new.user import CreateUserSchema, EditUserSchema, UserDetail
+from server.models.user import get_user_detail,verify_user,create_user, find_user_by_id, find_user_by_email, find_user_by_username,delete_user_by_id,edit_user_details
 from server.db import get_database
 from server.schemas import ShowUserWithId
 from ..utils.user import  validate_admin, get_current_user
@@ -15,10 +15,10 @@ async def create_new_user(request: Request, user: CreateUserSchema):
     result = await create_user(db, user)
     return jsonable_encoder(result)
 
-@router.get('/detail')
-async def get_user_detail(request: Request, current_user: ShowUserWithId = Depends(get_current_user)):
+@router.get('/detail',)
+async def get_user_details(request: Request, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
-    result = await find_user_by_id(db, current_user['_id'])
+    result = await get_user_detail(db, current_user['_id'])
     return jsonable_encoder(result)
 
 @router.get('/{id}', response_model=CreateUserSchema)
@@ -50,6 +50,13 @@ async def verify_users(request: Request, id: str, token: int):
     db = get_database(request)
     result = await verify_user(db, id, token)
     return jsonable_encoder(result)
+
+@router.put('/logout')
+async def logout(request: Request, current_user: ShowUserWithId = Depends(get_current_user)):
+    db = get_database(request)
+    await db['Users'].update_one({'_id': current_user['_id']}, {'$set': {'devices': ''}})
+    return {'success': True}
+
 @router.put('/detail')
 async def edit_user_detail(request: Request,info: EditUserSchema,current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)

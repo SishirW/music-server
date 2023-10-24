@@ -47,11 +47,11 @@ async def login_for_access_token(request: Request, background_tasks: BackgroundT
                     "detail": "Confirm account to continue"},
         )
 
-    access_token_expires = timedelta(days=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(days=15)
     access_token = create_access_token(
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
 
     if token != None:
-        await request.app.mongodb['Users'].update_one({'_id': user['_id']}, {'$push': {'devices': token}})
+        await request.app.mongodb['Users'].update_one({'_id': user['_id']}, {'$set': {'devices': token}})
     return {"access_token": access_token, "token_type": "bearer", "user_info": user}

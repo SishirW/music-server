@@ -7,10 +7,19 @@ class EditUserSchema(BaseModel):
     #username: Optional[str]
     location: Optional[str]
     phone_no: Optional[str]
-    social_links: Optional[SocialMedia]
+    #social_links: Optional[SocialMedia]
 
 class CreateUserSchema(BaseModel):
     full_name: str = Field(...)
     username: str = Field(...)
     email: EmailStr = Field(...)
     password: str = Field(...)
+    phone_no: Optional[str]
+
+class UserDetail(BaseModel):
+    full_name: str
+    username: str
+    email: str
+    type:str
+    location: str
+    points: str

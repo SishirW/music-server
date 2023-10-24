@@ -12,6 +12,7 @@ from ..utils.user import randomDigits, create_access_token, ACCESS_TOKEN_EXPIRE_
 
 collection_name = "Users"
 verification_collection_name= "VerificationToken"
+rewardcollection_name= "RewardPoints"
 
 class VerificationToken(BaseModel):
     token: int
@@ -28,10 +29,9 @@ class SocialMedia(BaseModel):
     youtube: Optional[str]=''
     twitter: Optional[str]=''
 
-class Token(BaseModel):
+class RewardPoints(BaseModel):
     user: str
-    token: int
-    created_at: datetime
+    points: int
 
 class User(BaseModel):
     full_name: str = Field(...)
@@ -51,25 +51,27 @@ async def create_user(db, user):
     old_user= await db[collection_name].find_one({"email": user.email})
     if old_user is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail=f"User with email {user.email} already exists!")
+                            detail={'message': f"User with email {user.email} already exists!","type": "email"})
     old_user= await db[collection_name].find_one({"username": user.username})
     if old_user is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail=f"User with username {user.username} already exists!")
+                            detail={'message': f"User with username {user.username} already exists!","type": "username"})
     
     user1 = User(
         full_name= user.full_name,
         username= user.username,
         email= user.email,
         password= get_password_hash(user.password),
+        phone_no= user.phone_no,
     )
     encoded = jsonable_encoder(user1)
     print(encoded)
     user_entry= await db[collection_name].insert_one(encoded)
     await add_verification_token(db, user_entry.inserted_id, randomDigits(5))
+    await add_reward_points(db, user_entry.inserted_id)
     # new_user = await find_band_by_id(db, str(bnd.id), user)
     # return new_band
-    return {'success': True}
+    return {'_id': user_entry.inserted_id}
 
 
 async def add_verification_token(db, user, token):
@@ -80,6 +82,16 @@ async def add_verification_token(db, user, token):
     encoded = jsonable_encoder(user1)
     print(encoded)
     await db[verification_collection_name].insert_one(encoded)
+    return True
+
+async def add_reward_points(db, user):
+    user1 =RewardPoints(
+        user= user, 
+        points= 0
+    )
+    encoded = jsonable_encoder(user1)
+    print(encoded)
+    await db[rewardcollection_name].insert_one(encoded)
     return True
 
 async def verify_user(db, user, token):
@@ -126,6 +138,15 @@ async def find_user_by_id(db, id):
                             detail=f"user not found!")
     return user
 
+async def get_user_detail(db, id):
+    user = await db[collection_name].find_one({"_id": id})
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"user not found!")
+    pipeline= get_detail_pipeline(id, user['type'])
+    detail =await db[collection_name].aggregate(pipeline).to_list(12)
+    return detail
+
 async def find_user_by_email(db, email):
     user = await db[collection_name].find_one({"email": email})
     if user is None:
@@ -169,3 +190,75 @@ async def edit_user_details(db, id,user_info):
 
     raise HTTPException(status_code=404, detail=f"User with id {id} not found")
 
+
+
+def get_detail_pipeline(user, type):
+    if(type=='artist'):
+        return [
+            {
+                "$match": {
+                    "_id": user
+                }
+            },
+            {
+            "$unset": ["password", "devices"]  
+        },
+    {
+                "$lookup": {
+                    "from": "Artist",
+                    "localField": "_id",
+                    "foreignField": "user_id",
+                    "as": "artist_details"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "SocialMedia",
+                    "localField": "artist_details.social_accounts",
+                    "foreignField": "_id",
+                    "as": "social_media"
+                }
+            },
+       
+]
+    elif(type=='venue'):
+        return [
+            {
+                "$match": {
+                    "_id": user
+                }
+            },
+            {
+            "$unset": ["password", "devices"]  
+        },
+    {
+                "$lookup": {
+                    "from": "Venue",
+                    "localField": "_id",
+                    "foreignField": "user_id",
+                    "as": "venue_details"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "SocialMedia",
+                    "localField": "venue_details.social_accounts",
+                    "foreignField": "_id",
+                    "as": "social_media"
+                }
+            },
+        ]
+    
+    else:
+        return [
+            {
+                "$match": {
+                    "_id": user
+                }
+                
+            },
+            {
+            "$unset": ["password", "devices"]  
+        },
+    
+        ]

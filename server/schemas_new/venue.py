@@ -1,14 +1,29 @@
 from typing import Optional, List
-from pydantic import BaseModel,Field
+from pydantic import BaseModel,Field, HttpUrl
 from datetime import datetime
+
+
+class CreateSocialMedia(BaseModel):
+    facebook: Optional[HttpUrl]
+    instagram: Optional[HttpUrl]
+    youtube: Optional[HttpUrl]
+    tiktok: Optional[HttpUrl]
 
 class CreateVenueSchema(BaseModel):
     alias: str= Field(...)
     location: str= Field(...)
     description: str= Field(...)
     category: List[str]= Field(...)
-    menu: List[str]= Field(...)
-    video: str= None
+    #menu: List[str]= Field(...)
+    video: Optional[HttpUrl]= None
+    social_media: CreateSocialMedia
+
+class EditVenueSchema(BaseModel):
+    alias: Optional[str]
+    location: Optional[str]
+    description: Optional[str]
+    category: Optional[List[str]]
+    video: Optional[HttpUrl]= None
 
 class CreatePackageSchema(BaseModel):
     name: str = Field(...)
@@ -23,8 +38,8 @@ class CreatePackageSchema(BaseModel):
 class CreateScheduleSchema(BaseModel):
     artist: Optional[str]
     description: str= Field(...)
-    start_time: datetime= Field()
-    end_time: datetime= Field()
+    start_time: datetime
+    end_time: datetime
 
 class CreateReviewSchema(BaseModel):
     venue: str

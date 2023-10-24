@@ -15,7 +15,7 @@ class Cart(BaseModel):
     count: int
 
 async def create_cart(db, cart: AddToCart, user):
-    if not check_product_exists(db, cart.product):
+    if not await check_product_exists(db, cart.product):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"Product not found!")
     old_cart= await check_product_exists_in_cart(db, cart.product, user)

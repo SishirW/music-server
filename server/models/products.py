@@ -19,7 +19,7 @@ class Product(BaseModel):
     price: float
     description: str
     category: List[str]
-    images: List[str]
+    images: List[str]=[]
     points: int
 
 class ProductReview(BaseModel):
@@ -41,13 +41,13 @@ async def add_product(db, product, user):
        name= product.name,
        price= product.price,
        description= product.description,
-       images= product.images,
        points=product.points,
        category= category
    )
     encoded = jsonable_encoder(product1)
-    await db[collection_name].insert_one(encoded)
-    return {'success': True}
+    add_product= await db[collection_name].insert_one(encoded)
+    detail= await db[collection_name].find_one({'_id': add_product.inserted_id})
+    return detail
 
 
 
@@ -79,8 +79,6 @@ async def get_relevant_product(db,page,category, search):
     else:
       pipeline= get_pipeline(page)  
       product =await db[collection_name].aggregate(pipeline).to_list(5)
-    #   product = await db[collection_name].find().skip(
-    #     (page-1)*5).limit(5).to_list(6)
     return product
 
 
@@ -98,6 +96,17 @@ async def add_images(db,product_id, files):
         return {"success": True, "images": names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                         detail='No image was added')
+
+async def delete_images(db, id, files):
+    empty=[]
+    for image in files:
+        update_result= await db[collection_name].update_one({'_id': id}, {'$pull': {'images': image}})
+        if update_result.modified_count == 0:
+            empty.append(image)
+    if len(empty) == 0:
+        return {"detail": "Successfully deleted image", "not_found": []}
+    else:
+        return {"detail": "Some images were missing", "not_found": empty}
 
 async def edit_product(db,product_id,product: EditProductSchema):
     product = {k: v for k, v in product.dict().items() if v is not None}
@@ -179,6 +188,8 @@ async def get_product_question(db, id,page):
     pipeline= get_product_question_pipeline(id, page)  
     questions =await db[question_collection_name].aggregate(pipeline).to_list(5)
     return questions
+
+
 
 
 def get_pipeline(page):    
