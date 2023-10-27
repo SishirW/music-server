@@ -716,6 +716,14 @@ def get_venue_detail_pipeline(id):
     }
   },
   {
+            "$unwind": "$package_details"
+        },
+  {
+            "$match": {
+                "package_details.valid": True
+            }
+        },
+  {
     "$lookup": {
       "from": "SocialMedia",
       "localField": "social_accounts",
