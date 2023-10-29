@@ -1,23 +1,26 @@
 from . import BaseModel
 from typing import List, Optional
-from pydantic import EmailStr,Field
+from pydantic import EmailStr,Field,HttpUrl
 from .bands import Location
 from datetime import datetime, timezone
 from fastapi.encoders import jsonable_encoder
 from fastapi import HTTPException, status
 import uuid, shutil, os
-from server.schemas_new.venue import  CreateReviewSchema,CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
+from server.schemas_new.artist import EditSocialMedia
+from server.schemas_new.venue import  EditVenueSchema,CreateVenueSchema,CreateReviewSchema,CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
 from .venue_category import check_venuecategory_exists
 from .payment import complete_booking_payment
 import requests
 from .orders import khalti_url
 from .payment import AddBookingPayment
+from .user import collection_name as user_collection_name
 collection_name= 'Venue'
 package_collection_name= 'Package'
 schedule_collection_name= 'VenueSchedule'
 booking_collection_name= 'PackageBooking'
 review_collection_name= 'VenueReview'
 points_collection_name= 'RewardPoints'
+social_media_collection_name= 'SocialMedia'
 class Category(BaseModel):
     category: str
 
@@ -62,7 +65,11 @@ class Package(BaseModel):
     booking_cost: float
     reward_points: int
 
-
+class SocialMedia(BaseModel):
+    facebook: Optional[HttpUrl]
+    instagram: Optional[HttpUrl]
+    youtube: Optional[HttpUrl]
+    tiktok: Optional[HttpUrl]
 
 class Venue(BaseModel):
     alias: str = Field(...)
@@ -73,24 +80,63 @@ class Venue(BaseModel):
     is_featured: bool= False
     is_verified: bool= True
     menu: List[str]=[]
-    video: str= None
+    video: HttpUrl= None
     user_id: str= Field(...)
+    social_accounts: str
     
-async def add_venue(db, venue, user):
+async def add_venue(db, venue: CreateVenueSchema, user):
     category= [x for x in venue.category if await check_venuecategory_exists(x,db)]
+    social= SocialMedia(
+        facebook= venue.social_media.facebook,
+        instagram= venue.social_media.instagram,
+        youtube= venue.social_media.youtube,
+        tiktok= venue.social_media.tiktok,
+    )
+    social_encoded= jsonable_encoder(social)
+    social_media_detail= await db[social_media_collection_name].insert_one(social_encoded)
+    social_media_id= social_media_detail.inserted_id
     venue1= Venue(
        alias= venue.alias,
        location= venue.location,
        description= venue.description,
        category= category,
-       user_id=user
+       user_id=user,
+       social_accounts= social_media_id,
+       video= venue.video,
    )
     encoded = jsonable_encoder(venue1)
-    await db[collection_name].insert_one(encoded)
-    return {'success': True}
+    insert_venue=await db[collection_name].insert_one(encoded)
+    detail= await db[collection_name].find_one({'_id': insert_venue.inserted_id})
+    return detail
 
+
+async def edit_venue(db,artist: EditVenueSchema, user):
+    artist = {k: v for k, v in artist.dict().items() if v is not None}
+    artist_check= await db[collection_name].find_one({'user_id': user})
+    if artist_check is None:
+        raise HTTPException(status_code=404, detail=f"artist not found")
+    artist_id= artist_check['_id']
+    if len(artist) >= 1:
+
+        update_result = await db[collection_name].update_one(
+            {"_id": artist_id}, {"$set": artist}
+        )
+
+        if update_result.modified_count == 1:
+            if (
+                updated_artist := await db[collection_name].find_one({"_id": artist_id})
+            ) is not None:
+                return updated_artist
+
+    if (
+        existing_artist := await db[collection_name].find_one({"_id": artist_id})
+    ) is not None:
+        return existing_artist
+
+    raise HTTPException(status_code=404, detail=f"Venue with id {artist_id} not found")
 
 async def get_venue_by_userid(db, id):
+    print(id)
     venue = await db[collection_name].find_one({"user_id": id})
     if venue is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -121,11 +167,13 @@ async def get_relevant_venue(db,page,category, search):
         venue =await db[collection_name].aggregate(pipeline).to_list(5)
     else:
       pipeline= get_pipeline(page)
-      venue =await db[collection_name].aggregate(pipeline).to_list(5)
+      venue =await db[collection_name].aggregate(pipeline).to_list(12)
     return venue
 
+
 async def get_featured_venue(db,page):
-    venue =await db[collection_name].find({"is_featured":True}).skip((page-1)*5).limit(5).to_list(5)
+    pipeline= get_featured_pipeline(page)
+    venue =await db[collection_name].aggregate(pipeline).to_list(12)
     return venue
 
 async def get_requested_venue(db,page):
@@ -133,7 +181,7 @@ async def get_requested_venue(db,page):
     return venue
 
 
-async def add_images(db,venue_id, files):
+async def add_images(db,venue_id, files, type=0):
     names = []
     if files is not None:
         for file in files:
@@ -142,7 +190,10 @@ async def add_images(db,venue_id, files):
             with open(f"media_new/venue/{venue_id}/{image_name}.png", "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             names.append(f"{image_name}.png")
-        db[collection_name].update_one({'_id': venue_id}, {'$push': {'images': {'$each':names}}})
+        if type==0:
+            db[collection_name].update_one({'_id': venue_id}, {'$push': {'images': {'$each':names}}})
+        else:
+            db[collection_name].update_one({'_id': venue_id}, {'$push': {'menu': {'$each':names}}})
         return {"success": True, "images": names}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                         detail='No image was added')
@@ -189,12 +240,27 @@ async def edit_package(db,package_id,package: EditPackageSchema, user):
 
     raise HTTPException(status_code=404, detail=f"Package with id {package_id} not found")
 
+
+
 async def check_package_belongs_to_venue(db,package_id, user_id):
     package= await db[package_collection_name].find_one({"_id": package_id})
     if package is None:
         raise HTTPException(status_code=404, detail=f"Package not found")
     venue=await get_venue_by_userid(db,user_id)
     return package['venue_id']== venue['_id']
+
+async def delete_venue(db, id):
+    check= await check_venue_exists(db, id)
+
+    if not check:
+        raise HTTPException(status_code=404, detail=f"Venue not found")
+    venue= await db[collection_name].find_one({'_id': id})
+    deleted_venue=await db[collection_name].delete_one({'_id': id})
+    await db[user_collection_name].update_one({"_id": venue['user_id']}, {"$set": {'type': 'user'}})
+    if deleted_venue.deleted_count == 1:
+        return {f"Successfully deleted package"}
+    else:
+        raise HTTPException(status_code=404, detail=f"Package not found")
 
 async def delete_package(db, package_id, user):
     check= await check_package_belongs_to_venue(db, package_id, user)
@@ -214,7 +280,7 @@ async def add_schedule(db,schedule: CreateScheduleSchema,user_id):
         artist= schedule.artist,
         description= schedule.description, 
         start_time= schedule.start_time, 
-        end_time= schedule.start_time,
+        end_time= schedule.end_time,
     )
     encoded = jsonable_encoder(sch)
     await db[schedule_collection_name].insert_one(encoded)
@@ -262,7 +328,19 @@ async def delete_schedule(db, schedule_id, user):
     else:
         raise HTTPException(status_code=404, detail=f"schedule not found")
 
-
+async def delete_images(db, id, files, type):
+    empty=[]
+    for image in files:
+        if type==0:
+            update_result= await db[collection_name].update_one({'_id': id}, {'$pull': {'images': image}})
+        else:
+            update_result= await db[collection_name].update_one({'_id': id}, {'$pull': {'menu': image}})
+        if update_result.modified_count == 0:
+            empty.append(image)
+    if len(empty) == 0:
+        return {"detail": "Successfully deleted image", "not_found": []}
+    else:
+        return {"detail": "Some images were missing", "not_found": empty}
 
 
 async def get_venue_package_booking(db, package_id, user,page):
@@ -321,6 +399,31 @@ async def book_package(db,user,booking: BookPackageSchema):
     booking_details= await db[booking_collection_name].find_one(book.inserted_id)
     return booking_details
 
+async def edit_social_media(db,artist: EditSocialMedia, user):
+    artist = {k: v for k, v in artist.dict().items() if v is not None}
+    artist_check= await db[collection_name].find_one({'user_id': user})
+    if artist_check is None:
+        raise HTTPException(status_code=404, detail=f"artist not found")
+    social_id= artist_check['social_accounts']
+    if len(artist) >= 1:
+
+        update_result = await db[social_media_collection_name].update_one(
+            {"_id": social_id}, {"$set": artist}
+        )
+
+        if update_result.modified_count == 1:
+            if (
+                updated_artist := await db[social_media_collection_name].find_one({"_id": social_id})
+            ) is not None:
+                return updated_artist
+
+    if (
+        existing_artist := await db[social_media_collection_name].find_one({"_id": social_id})
+    ) is not None:
+        return existing_artist
+
+    raise HTTPException(status_code=404, detail=f"Social Media with id {social_id} not found")
+
 async def check_seats_on_date(db, book_date, package):
     bookings= await db[booking_collection_name].find({'package_id': package},     ).to_list(10000)
     booking_of_date=[]
@@ -356,11 +459,31 @@ async def get_venue_review(db, id,page):
     reviews =await db[review_collection_name].aggregate(pipeline).to_list(5)
     return reviews
 
+async def get_venue_package(db,page,limit, type,user):  
+    venue= await get_venue_by_userid(db, user)
+    if type==0:
+        packages=await db[package_collection_name].find({'venue_id': venue['_id'], 'valid':True}).skip((page-1)*limit).limit(limit).to_list(limit+1)
+    else:
+        packages=await db[package_collection_name].find({'venue_id': venue['_id'], 'valid':False}).skip((page-1)*limit).limit(limit).to_list(limit+1)
+    return packages
+
+async def get_venue_schedule(db,page,limit,user):  
+    venue= await get_venue_by_userid(db, user)
+    schedule= await db[schedule_collection_name].find({'venue': venue['_id']}).skip((page-1)*limit).limit(limit).to_list(limit+1)
+    return schedule
+
 
 async def feature_venue(db,id):
     await get_venue_byid(db, id)
     result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_featured': True}})
-    print(result)
+    print(result.modified_count)
+    if result.modified_count==1:
+        return {'success'}
+    
+
+async def invalid_package(db,id, user):
+    await check_package_belongs_to_venue(db, id, user)
+    result= await db[package_collection_name].update_one({'_id': id}, {'$set': {'valid': False}})
     return {"success":True}
 
 async def unfeature_venue(db,id):
@@ -370,7 +493,7 @@ async def unfeature_venue(db,id):
     return {"success":True}
 
 async def verify_venue(db,id):
-    await get_venue_byid(db, id)
+    await check_venue_exists(db, id)
     result= await db[collection_name].update_one({'_id': id}, {'$set': {'is_verified': True}})
     print(result)
     return {"success":True}
@@ -389,6 +512,50 @@ async def complete_booking(db,id, user):
     result= await db[booking_collection_name].update_one({'_id': id}, {'$set': {'complete': True}})
     print(result)
     return {"success":True}
+
+def get_featured_pipeline(page):
+    return [
+        {
+            "$match": {
+                "is_featured": True
+            }
+        },
+  {
+            "$lookup": {
+                "from": "VenueReview",
+                "localField": "_id",
+                "foreignField": "venue",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },
+  
+  
+  {
+      "$sort":{
+          
+          "_id":1,
+      }
+  },
+  {
+    "$skip": (page-1)*12
+  },
+  {
+    "$limit": 12
+  }
+]
 
 def get_pipeline(page):
     return [
@@ -427,10 +594,10 @@ def get_pipeline(page):
       }
   },
   {
-    "$skip": (page-1)*5
+    "$skip": (page-1)*12
   },
   {
-    "$limit": 5
+    "$limit": 12
   }
 ]
 
@@ -548,6 +715,22 @@ def get_venue_detail_pipeline(id):
       "as": "package_details"
     }
   },
+  {
+            "$unwind": "$package_details"
+        },
+  {
+            "$match": {
+                "package_details.valid": True
+            }
+        },
+  {
+    "$lookup": {
+      "from": "SocialMedia",
+      "localField": "social_accounts",
+      "foreignField": "_id",
+      "as": "social_accounts"
+    }
+  },
 
   
  {
@@ -556,11 +739,11 @@ def get_venue_detail_pipeline(id):
       "preserveNullAndEmptyArrays": True
     }
   },
-  {
-    "$match": {
-      "package_details.valid": True
-    }
-  },
+#   {
+#     "$match": {
+#       "package_details.valid": True
+#     }
+#   },
   {
     "$group": {
       "_id": "$_id",
@@ -593,6 +776,9 @@ def get_venue_detail_pipeline(id):
       },
       "package_details": {
         "$push": "$package_details"
+      },
+      "social_accounts": {
+        "$push": "$social_accounts"
       }
     }
   },
@@ -664,7 +850,7 @@ def get_venue_package_pipeline(package, venue, page):
         },
         {
     "$lookup": {
-      "from": "Transaction",
+      "from": "BookingTransaction",
       "localField": "payment",
       "foreignField": "_id",
       "as": "payment_details"
@@ -684,6 +870,8 @@ def get_venue_package_pipeline(package, venue, page):
                 "payment": 1,
                 "booking_time": 1,
                 "username": "$user_details.username",
+                "email": "$user_details.email",
+                "phone_no": "$user_details.phone_no",
                 "payment_details": "$payment_details",
             }
         },

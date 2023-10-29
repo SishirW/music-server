@@ -103,6 +103,7 @@ async def validate_artist(request: Request, token: str = Depends(oauth2_scheme))
     except JWTError:
         raise credentials_exception
     user = await request.app.mongodb['Users'].find_one({'username': username})
+    print(user['type'])
     if user is None:
         raise credentials_exception
     if user['type'] != "artist":
@@ -146,7 +147,7 @@ async def validate_user_without_error(request: Request, token: str = Depends(opt
         if username is None:
             raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        return {'_id': None}
     user = await request.app.mongodb['Users'].find_one({'username': username})
     if user is None:
         raise credentials_exception

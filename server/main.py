@@ -1,10 +1,13 @@
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
-from server.routers import   venues, cart, orders, artist, packages, grow, used_products, repair, ads
-from server.routers_new import orders,user,auth, instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from server.routers import   venues, cart, orders, artist, packages
+from server.routers_new import used_products,repair,grow,ads,orders,user,auth, instruments,cart, genres, bands, user as userv2, artist, venue,venue_category, product_category, products
 from motor.motor_asyncio import AsyncIOMotorClient
-
+from tempfile import NamedTemporaryFile
 from starlette.middleware.cors import CORSMiddleware
+from server.db import get_database
+import json
+
 
 
 app = FastAPI(
@@ -41,6 +44,12 @@ async def start_database():
 async def shutdown_db_client():
     app.mongodb_client.close()
 
+app.include_router(used_products.router)
+app.include_router(repair.router)
+
+app.include_router(grow.router)
+app.include_router(ads.router)
+
 app.include_router(orders.router)
 app.include_router(products.router)
 
@@ -59,16 +68,15 @@ app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(artist.router)
 # Products and Repairs
-app.include_router(used_products.router)
+
 # app.include_router(musical_products.router)
 #app.include_router(venues.router)
-app.include_router(repair.router)
 # Orders
 app.include_router(cart.router)
 app.include_router(orders.router)
-app.include_router(grow.router)
+
 # Ads
-app.include_router(ads.router)
+#app.include_router(ads.router)
 
 # app.include_router(packages.router)
 
@@ -79,6 +87,26 @@ app.include_router(ads.router)
 @app.get("/")
 async def root():
     return {"Welcome": "Welcome to Music app"}
+
+async def save_mongodb_data_to_file(request):
+
+    db = get_database(request)
+    collection = db['Artist']
+    
+    cursor = collection.find()
+    data = [document async for document in cursor]
+    
+    # Create a temporary JSON file
+    with NamedTemporaryFile(mode="w+", delete=False, suffix=".json") as temp_file:
+        json.dump(data, temp_file, default=str)
+
+    return temp_file.name
+
+@app.get("/download")
+async def download_all_from_mongodb(request: Request):
+    json_file_path = await save_mongodb_data_to_file(request)
+    return FileResponse(json_file_path, media_type="application/json")
+
 
 
 @app.get("/media/{path}/{id}")
@@ -96,3 +124,14 @@ async def get_venue_media(id: str, path: str):
 @app.get("/media_new/artist/{path}/{id}")
 async def get_artist_media(id: str, path: str):
     return FileResponse(f'media_new/artist/{path}/{id}')
+@app.get("/media_new/advertisments/{id}")
+async def get_advertisments_media(id: str):
+    return FileResponse(f'media_new/advertisments/{id}')
+
+@app.get("/media_new/repair/{path}/{id}")
+async def get_repair_media(id: str, path: str):
+    return FileResponse(f'media_new/repair/{path}/{id}')
+
+@app.get("/media_new/used_product/{path}/{id}")
+async def get_repair_media(id: str, path: str):
+    return FileResponse(f'media_new/used_product/{path}/{id}')

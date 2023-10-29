@@ -1,7 +1,7 @@
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 from datetime import datetime
-
+from .venue import CreateSocialMedia
 class CreateArtistSchema(BaseModel):
     alias: str
     description: str
@@ -9,8 +9,27 @@ class CreateArtistSchema(BaseModel):
     genre: List[str] =[]
     location: str
     looking_for: List[str]=[]
-    images: List[str]= Field(...)
-    video: Optional[str]
+    #images: List[str]= Field(...)
+    video: Optional[HttpUrl]
+    social_media: CreateSocialMedia
+
+class EditArtistSchema(BaseModel):
+    alias: Optional[str]
+    description: Optional[str]
+    skills: Optional[List[str]]
+    genre: Optional[List[str]]
+    location: Optional[str]
+    looking_for: Optional[List[str]]
+    #images: List[str]= Field(...)
+    video: Optional[HttpUrl]
+
+    #social_media: CreateSocialMedia
+
+class EditSocialMedia(BaseModel):
+    facebook: Optional[HttpUrl]
+    instagram: Optional[HttpUrl]
+    youtube: Optional[HttpUrl]
+    tiktok: Optional[HttpUrl]
 
 class CreateScheduleSchema(BaseModel):
     venue: Optional[str]

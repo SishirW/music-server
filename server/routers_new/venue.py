@@ -2,11 +2,12 @@ from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
 from typing import List
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
-from server.schemas_new.venue import CreateVenueSchema,CreateReviewSchema, CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
+from server.schemas_new.artist import EditSocialMedia
+from server.schemas_new.venue import CreateVenueSchema,EditVenueSchema ,CreateReviewSchema, CreatePackageSchema, EditPackageSchema, BookPackageSchema, CreateScheduleSchema, EditScheduleSchema
 from ..utils.user import get_current_user, validate_venue, validate_admin
 from server.schemas import ShowUserWithId
 from server.db import get_database
-from server.models.venue import complete_booking,check_seat_available,get_venue_package_booking,get_venue_review,add_review,delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
+from server.models.venue import edit_social_media,get_venue_schedule,delete_images, edit_venue,delete_venue,invalid_package,get_venue_package,check_venue_exists,complete_booking,check_seat_available,get_venue_package_booking,get_venue_review,add_review,delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
 
 router = APIRouter(prefix="/venue", tags=["Venue"])
 
@@ -50,6 +51,7 @@ async def get_relevant_venues(request: Request, page: int = 1,category: str = No
     return jsonable_encoder(result)
 
 
+
 @router.get('/featured')
 async def get_featured_venues(request: Request, page: int = 1):
     db = get_database(request)
@@ -61,6 +63,20 @@ async def get_requested_venues(request: Request, page: int = 1, current_user: Sh
     db = get_database(request)
     result = await get_requested_venue(db,page)
     return jsonable_encoder(result)
+
+@router.get('/packages')
+async def get_venue_packages(request: Request,page: int = 1, limit: int=20,type:int=0, current_user: ShowUserWithId = Depends(validate_venue)):
+    db = get_database(request)
+    result = await get_venue_package(db,page,limit,type,current_user['_id'])
+    return jsonable_encoder(result)
+
+@router.get('/schedule')
+async def get_venue_schedules(request: Request,page: int = 1, limit: int=20, current_user: ShowUserWithId = Depends(validate_venue)):
+    db = get_database(request)
+    result = await get_venue_schedule(db,page,limit,current_user['_id'])
+    return jsonable_encoder(result)
+
+
 
 @router.get('/review')
 async def get_venue_reviews(request: Request, id:str,page: int = 1):
@@ -93,11 +109,23 @@ async def get_venue_by_user_id(id: str, request: Request):
     return jsonable_encoder(result)
 
 
-@router.put('/images', response_description='Update venue image')
-async def add_venue_images(request: Request, files: List[UploadFile],id: str):
+@router.put('/', response_description='Edit Venue')
+async def edit_venues(request: Request, venue: EditVenueSchema, current_user: ShowUserWithId = Depends(validate_venue)):
     db = get_database(request)
-    venue=await get_venue_byid(db,id)
-    result = await add_images(db, id,files)
+    result=await edit_venue(db, venue, current_user['_id'])
+    return jsonable_encoder(result)
+
+@router.put('/social', response_description='Update artist social media links')
+async def edit_venue_social_media(request: Request, social_links: EditSocialMedia,current_user: ShowUserWithId = Depends(validate_venue)):
+    db = get_database(request)
+    result = await edit_social_media(db, social_links,current_user['_id'])
+    return jsonable_encoder(result)
+
+@router.put('/images', response_description='Update venue image')
+async def add_venue_images(request: Request, files: List[UploadFile],id: str, type: int=0):
+    db = get_database(request)
+    venue=await check_venue_exists(db,id)
+    result = await add_images(db, id,files,type)
     return jsonable_encoder(result)
 
 @router.put('/package', response_description='Update venue package')
@@ -111,6 +139,14 @@ async def edit_artist_schedule(request: Request, schedule: EditScheduleSchema, s
     db = get_database(request)
     result=await edit_schedule(db,schedule_id, schedule, current_user['_id'])
     return jsonable_encoder(result)
+
+@router.put('/invalid', response_description='Make package invalid')
+async def invalid_packages(request: Request, package_id: str, current_user: ShowUserWithId = Depends(validate_venue)):
+    db = get_database(request)
+    result=await invalid_package(db, package_id, current_user['_id'])
+    return jsonable_encoder(result)
+
+
 
 
 @router.put('/feature',response_description='Feature venue')
@@ -143,6 +179,13 @@ async def complete_package_booking(request: Request,booking_id: str, current_use
     result=await complete_booking(db,booking_id, current_user['_id'])
     return jsonable_encoder(result)
 
+@router.delete('/', response_description='Delete venue',status_code=status.HTTP_204_NO_CONTENT)
+async def delete_venues(request: Request, id: str, current_user: ShowUserWithId = Depends(validate_admin)):
+    db = get_database(request)
+    result=await delete_venue(db, id)
+    return jsonable_encoder(result)
+
+
 @router.delete('/package', response_description='Delete venue package',status_code=status.HTTP_204_NO_CONTENT)
 async def delete_venue_package(request: Request, package_id: str, current_user: ShowUserWithId = Depends(validate_venue)):
     db = get_database(request)
@@ -153,4 +196,11 @@ async def delete_venue_package(request: Request, package_id: str, current_user: 
 async def delete_artist_schedule(request: Request, schedule_id: str, current_user: ShowUserWithId = Depends(validate_venue)):
     db = get_database(request)
     result=await delete_schedule(db, schedule_id, current_user['_id'])
+    return jsonable_encoder(result)
+
+@router.delete('/images', response_description='Update product image')
+async def delete_venue_images(request: Request, files: List[str],id: str,type: int=0,current_user: ShowUserWithId = Depends(validate_venue)):
+    db = get_database(request)
+    #artist=await get_artist_by_id(db,id)
+    result = await delete_images(db, id,files, type)
     return jsonable_encoder(result)
