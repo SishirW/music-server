@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from server.schemas import ShowUser
 from ..utils.user import validate_artist, validate_admin
@@ -15,10 +17,12 @@ router = APIRouter(prefix="/bands", tags=["Bands"])
 
 
 @router.get('/')
-async def get_bands(request: Request, page=1, limit=5,  current_user: ShowUser = Depends(validate_artist)):
+async def get_bands(request: Request, skills=[], page=1, limit=5,  current_user: ShowUser = Depends(validate_artist)):
     db = get_database(request)
     location = get_location_from_header(request)
-    result = await find_all_bands(db, current_user, location, int(page), int(limit))
+    skills = json.loads(skills)
+
+    result = await find_all_bands(db, current_user, location, skills,  int(page), int(limit))
     return jsonable_encoder({"bands": result})
 
 
