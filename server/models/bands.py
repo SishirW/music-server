@@ -107,10 +107,14 @@ async def find_all_bands(db, user, location, skills, page, limit):
     return bands
 
 
-async def find_all_bands_for_a_user(db, user, page, limit):
-    bands = await db[collection_name].find({
+async def find_all_bands_for_a_user(db, user, skills, page, limit):
+    query = {
         'created_by': user['username']
-    }).skip(
+    }
+    if len(skills):
+        query["genres.instrumentName"] = {"$all": skills}
+
+    bands = await db[collection_name].find(query).skip(
         (page-1)*limit).limit(limit).to_list(limit+1)
     artist_profile = await db['Artist'].find_one({'artist_id': user['_id']})
     return {"bands": bands,
