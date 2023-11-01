@@ -18,6 +18,8 @@ router = APIRouter(prefix="/bands", tags=["Bands"])
 
 @router.get('/')
 async def get_bands(request: Request, skills=[], page=1, limit=5,  current_user: ShowUser = Depends(validate_artist)):
+    print(request)
+
     db = get_database(request)
     location = get_location_from_header(request)
     skills = json.loads(skills)
@@ -28,8 +30,10 @@ async def get_bands(request: Request, skills=[], page=1, limit=5,  current_user:
 
 @router.get('/my-listings')
 async def get_my_bands(request: Request, skills=[], page=1, limit=5,  current_user: ShowUser = Depends(validate_artist)):
+    print(type(skills))
     db = get_database(request)
     skills = json.loads(skills)
+    print(skills)
     result = await find_all_bands_for_a_user(db, current_user, skills, int(page), int(limit))
     return jsonable_encoder(result)
 

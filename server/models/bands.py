@@ -38,8 +38,8 @@ class Genre(PydanticBaseModel):
 class Band(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    skills: Optional[List[str]] = None
-    genres: List[Genre]
+    genres: Optional[List[str]] = None
+    skills: List[Genre]
     location: Location
     created_by: str
 
@@ -61,7 +61,7 @@ async def get_relevant_band_count(db):
 async def add_new_band(db, band: AddBandSchema, location, user):
     location = {
         "type": "Feature",
-        "geometry": {"type": "Point", "coordinates": [location['long'], location['lat']]},
+        "geometry": {"type": "Point", "coordinates": [20.1, 45]},
         "properties": {
             "category": "Stadiums",
             "name": user['username']
@@ -112,7 +112,7 @@ async def find_all_bands_for_a_user(db, user, skills, page, limit):
         'created_by': user['username']
     }
     if len(skills):
-        query["genres.instrumentName"] = {"$all": skills}
+        query["skills.instrumentName"] = {"$all": skills}
 
     bands = await db[collection_name].find(query).skip(
         (page-1)*limit).limit(limit).to_list(limit+1)
@@ -139,7 +139,7 @@ async def find_relevant_bands(db, user, lat, long, skills, page, limit):
     }
 
     if len(skills):
-        query["skills"] = {"$all": skills}
+        query["skills.instrumentName"] = {"$all": skills}
 
     bands = await db[collection_name].find(query).skip(
         (page-1)*limit).limit(limit).to_list(limit+1)
