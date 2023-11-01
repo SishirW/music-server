@@ -13,6 +13,8 @@ class AddBandSchema(BaseModel):
     genres: List[str] = list("str")
     skills: List[Genre]
 
+    
+
 
 class UpdateBandSchema(BaseModel):
     name: Optional[str] = Field("Band Name")

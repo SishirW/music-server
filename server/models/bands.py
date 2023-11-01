@@ -151,5 +151,7 @@ async def find_relevant_bands(db, user, lat, long, skills, page, limit):
         band['artist'] = artist_profile
     return bands
 
+
+
     # async def update_band(db,id,data):
     #     band
