@@ -21,6 +21,7 @@ class Product(BaseModel):
     category: List[str]
     images: List[str]=[]
     points: int
+    is_featured: bool= False
 
 class ProductReview(BaseModel):
     reviewer: str
@@ -69,15 +70,15 @@ async def check_product(db, id):
     product = await db[collection_name].find_one({"_id": id})
     return product!=None
 
-async def get_relevant_product(db,page,category, search):
+async def get_relevant_product(db,page,category, search, sort):
     if search != None:
-        pipeline= get_search_pipeline(search, page)  
+        pipeline= get_search_pipeline(search, page, sort)  
         product =await db[collection_name].aggregate(pipeline).to_list(5)
     elif category != None:
-        pipeline= get_category_pipeline(category, page)  
+        pipeline= get_category_pipeline(category, page, sort)  
         product =await db[collection_name].aggregate(pipeline).to_list(5)
     else:
-      pipeline= get_pipeline(page)  
+      pipeline= get_pipeline(page, sort)  
       product =await db[collection_name].aggregate(pipeline).to_list(5)
     return product
 
@@ -192,8 +193,11 @@ async def get_product_question(db, id,page):
 
 
 
-def get_pipeline(page):    
-    return [
+def get_pipeline(page, sort):
+
+    if sort==0:
+          return [
+        
         {
             "$lookup": {
                 "from": "ProductReview",
@@ -216,6 +220,12 @@ def get_pipeline(page):
             "$unset": "reviews"  
         },
         {
+      "$sort":{
+          "is_featured":-1,
+          "_id":1,
+      }
+  },
+        {
   "$skip": (page-1)*5
   },
   {
@@ -224,7 +234,176 @@ def get_pipeline(page):
     ]
 
 
-def get_search_pipeline(keyword, page):    
+    elif sort==1:
+        return [
+        
+        {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },
+        {
+      "$sort":{
+          "price":-1,
+          "_id":1,
+      }
+  },
+        {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+    ]
+
+    
+    return [
+        
+        {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },
+        {
+      "$sort":{
+          "price":1,
+          "_id":1,
+      }
+  },
+        {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+    ] 
+    
+
+
+def get_search_pipeline(keyword, page, sort):
+
+    if sort==0:
+         return [
+      {
+  "$match": {
+    "name": {
+      "$regex": f".*{keyword}.*",
+      "$options": "i"
+    },
+  }
+  },
+  
+  {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews" 
+        },
+  {
+      "$sort":{
+          "is_featured":-1,
+          "_id":1,
+      }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
+    elif sort==1:
+        return [
+      {
+  "$match": {
+    "name": {
+      "$regex": f".*{keyword}.*",
+      "$options": "i"
+    },
+  }
+  },
+  
+  {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews" 
+        },
+  {
+      "$sort":{
+          "price":-1,
+          "_id":1,
+      }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]   
     return [
       {
   "$match": {
@@ -256,7 +435,12 @@ def get_search_pipeline(keyword, page):
         {
             "$unset": "reviews" 
         },
-  
+  {
+      "$sort":{
+          "price":1,
+          "_id":1,
+      }
+  },
   {
   "$skip": (page-1)*5
   },
@@ -267,7 +451,95 @@ def get_search_pipeline(keyword, page):
   
   
 
-def get_category_pipeline(category, page):
+def get_category_pipeline(category, page, sort):
+    if sort==0:
+        return [
+      {
+            "$match": {
+                "category": {
+                    "$in": [category]
+                },
+               
+            }
+        },
+        {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews" 
+        },
+  {
+      "$sort":{
+          "is_featured":-1,
+          "_id":1,
+      }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
+    elif sort==1:
+        return [
+      {
+            "$match": {
+                "category": {
+                    "$in": [category]
+                },
+               
+            }
+        },
+        {
+            "$lookup": {
+                "from": "ProductReview",
+                "localField": "_id",
+                "foreignField": "product",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews" 
+        },
+  {
+      "$sort":{
+          "price":-1,
+          "_id":1,
+      }
+  },
+  {
+  "$skip": (page-1)*5
+  },
+  {
+  "$limit": 5
+  }
+]
     return [
       {
             "$match": {
@@ -298,7 +570,12 @@ def get_category_pipeline(category, page):
         {
             "$unset": "reviews" 
         },
-  
+  {
+      "$sort":{
+          "price":1,
+          "_id":1,
+      }
+  },
   {
   "$skip": (page-1)*5
   },

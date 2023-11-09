@@ -29,9 +29,9 @@ async def add_new_question(request: Request,question: CreateQuestionSchema, curr
     return jsonable_encoder(result)
 
 @router.get('/')
-async def get_relevant_products(request: Request, page: int = 1,category: str = None, search: str = None):
+async def get_relevant_products(request: Request, page: int = 1,sort: int= 0,category: str = None, search: str = None):
     db = get_database(request)
-    result = await get_relevant_product(db,page,category, search)
+    result = await get_relevant_product(db,page,category, search, sort)
     return jsonable_encoder(result)
 
 @router.get('/review')

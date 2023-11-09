@@ -3,7 +3,7 @@ from .user import validate_admin, get_current_user
 from ..schemas import GrowForm, ShowUserWithId, GrowVideoForm
 from fastapi.encoders import jsonable_encoder
 import uuid
-from ..background_tasks import send_notification
+from ..utils.background_tasks import send_notification
 from datetime import datetime
 
 
@@ -19,11 +19,11 @@ async def create_grow(request: Request, grow: GrowForm, background_tasks: Backgr
     await request.app.mongodb['Grow'].update_one({'_id': new_grow.inserted_id}, {'$set': {'owner_id': current_user['_id'], 'date_added': datetime.now()}})
     admin = await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
 
-    # devices = []
-    # for users in admin:
-    #     devices.extend(users['devices'])
-    # background_tasks.add_task(send_notification, tokens=devices, detail={
-    # }, type='grow', title='Grow', body='New enquiry at {} by {}'.format(grow['type'], grow['name']))
+    devices = []
+    for users in admin:
+        devices.append(users['devices'])
+    background_tasks.add_task(send_notification, tokens=devices, detail={
+    }, type='grow', title='Grow', body='New enquiry at {} by {}'.format(grow['type'], grow['name']))
 
     return {"success": True, "id": new_grow.inserted_id}
 

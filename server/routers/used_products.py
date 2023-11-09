@@ -9,7 +9,7 @@ from ..schemas import CreateUsedProduct, ShowUserWithId, ShowUsedProduct, EditUs
 import shutil
 from uuid import uuid1, uuid4
 from pydantic import parse_obj_as, Field
-from ..background_tasks import send_notification
+from ..utils.background_tasks import send_notification
 from datetime import datetime
 
 

@@ -6,7 +6,7 @@ from .user import get_current_user, validate_artist, validate_admin, check_is_ar
 import shutil
 from fastapi.encoders import jsonable_encoder
 import os
-from ..background_tasks import send_notification
+from ..utils.background_tasks import send_notification
 
 
 router = APIRouter(prefix="/artist", tags=["Artist"])

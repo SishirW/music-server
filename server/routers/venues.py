@@ -12,7 +12,7 @@ import requests
 import os
 import pytz
 from datetime import datetime
-from ..background_tasks import send_notification
+from ..utils.background_tasks import send_notification
 
 router = APIRouter(prefix="/venues", tags=["Venues"])
 

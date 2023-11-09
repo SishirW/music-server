@@ -17,6 +17,7 @@ class EditProductSchema(BaseModel):
     category: Optional[List[str]]
     images: Optional[List[str]]
     points: Optional[int]
+    is_featured: Optional[bool]
 
 class CreateReviewSchema(BaseModel):
     product: str

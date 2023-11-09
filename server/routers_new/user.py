@@ -1,25 +1,35 @@
-from fastapi import Request, HTTPException,APIRouter,status,Depends
+from fastapi import Request, HTTPException,APIRouter,status,Depends, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.user import CreateUserSchema, EditUserSchema, UserDetail
-from server.models.user import get_user_detail,verify_user,create_user, find_user_by_id, find_user_by_email, find_user_by_username,delete_user_by_id,edit_user_details
+from server.models.user import get_following,get_user_detail,verify_user,create_user, find_user_by_id, find_user_by_email, find_user_by_username,delete_user_by_id,edit_user_details
 from server.db import get_database
 from server.schemas import ShowUserWithId
 from ..utils.user import  validate_admin, get_current_user
+from ..utils.background_tasks import send_email
 
 router = APIRouter(prefix="/user", tags=["User"])
 
 
 @router.post('/')
-async def create_new_user(request: Request, user: CreateUserSchema):
+async def create_new_user(request: Request,background_tasks: BackgroundTasks, user: CreateUserSchema):
     db = get_database(request)
     result = await create_user(db, user)
-    return jsonable_encoder(result)
+    background_tasks.add_task(
+        send_email, email=user.email, message=f"Your Confirmation code is {result['verification_number']} .")
+    return {'_id': result['_id']}
 
 @router.get('/detail',)
 async def get_user_details(request: Request, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await get_user_detail(db, current_user['_id'])
     return jsonable_encoder(result)
+
+@router.get('/following')
+async def get_followings(request: Request, current_user: ShowUserWithId = Depends(get_current_user),page: int=1):
+    db = get_database(request)
+    result = await get_following(db, page,current_user['_id'])
+    return jsonable_encoder(result)
+
 
 @router.get('/{id}', response_model=CreateUserSchema)
 async def get_user_by_id(id: str, request: Request, current_user: ShowUserWithId = Depends(validate_admin)):

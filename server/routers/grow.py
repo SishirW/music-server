@@ -3,7 +3,7 @@ from .user import validate_admin, get_current_user
 from ..schemas import GrowForm, ShowUserWithId, GrowVideoForm
 from fastapi.encoders import jsonable_encoder
 import uuid
-from ..background_tasks import send_notification
+from ..utils.background_tasks import send_notification
 from datetime import datetime
 
 

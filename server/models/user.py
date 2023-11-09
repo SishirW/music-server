@@ -13,6 +13,7 @@ from ..utils.user import randomDigits, create_access_token, ACCESS_TOKEN_EXPIRE_
 collection_name = "Users"
 verification_collection_name= "VerificationToken"
 rewardcollection_name= "RewardPoints"
+follow_collection_name= 'ArtistFollow'
 
 class VerificationToken(BaseModel):
     token: int
@@ -45,6 +46,7 @@ class User(BaseModel):
     devices: List[str]= []
     points: int =0
     social_links: Optional[SocialMedia]
+    is_instructor: bool=False
 
 
 async def create_user(db, user):
@@ -63,15 +65,18 @@ async def create_user(db, user):
         email= user.email,
         password= get_password_hash(user.password),
         phone_no= user.phone_no,
+        is_instructor= user.is_instructor,
     )
     encoded = jsonable_encoder(user1)
     print(encoded)
     user_entry= await db[collection_name].insert_one(encoded)
-    await add_verification_token(db, user_entry.inserted_id, randomDigits(5))
+    verification_number= randomDigits(5)
+    await add_verification_token(db, user_entry.inserted_id, verification_number)
     await add_reward_points(db, user_entry.inserted_id)
     # new_user = await find_band_by_id(db, str(bnd.id), user)
     # return new_band
-    return {'_id': user_entry.inserted_id}
+    
+    return {'_id': user_entry.inserted_id, 'email': user.email, 'verification_number': verification_number}
 
 
 async def add_verification_token(db, user, token):
@@ -191,6 +196,58 @@ async def edit_user_details(db, id,user_info):
     raise HTTPException(status_code=404, detail=f"User with id {id} not found")
 
 
+async def get_following(db,page,user_id):
+    
+    pipeline= [
+  {
+    "$match": {
+      "user": user_id
+    }
+  },
+  {
+    "$lookup": {
+      "from": "Artist",
+      "localField": "artist",
+      "foreignField": "user_id",
+      "as": "artist_detail"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "ArtistFollow",
+      "localField": "artist",
+      "foreignField": "artist",
+      "as": "artist_followers"
+    }
+  },
+  {
+    "$addFields": {
+      "isFollowedByUser": {
+        "$in": [
+          user_id,
+          "$artist_followers.user"
+        ]
+      }
+    }
+  },
+  {
+    "$project": {
+      "_id": 0,
+      "artist_detail": "$artist_detail",
+      "following": "$isFollowedByUser"
+    }
+  },
+  {
+    "$skip": (page-1)*5
+  },
+  {
+    "$limit": 5
+  }
+]
+    following= await db[follow_collection_name].aggregate(pipeline).to_list(5)
+    return following
+
+
 
 def get_detail_pipeline(user, type):
     if(type=='artist'):
@@ -203,6 +260,14 @@ def get_detail_pipeline(user, type):
             {
             "$unset": ["password", "devices"]  
         },
+        {
+                "$lookup": {
+                    "from": "RewardPoints",
+                    "localField": "_id",
+                    "foreignField": "user",
+                    "as": "points_detail"
+                }
+            },
     {
                 "$lookup": {
                     "from": "Artist",
@@ -219,6 +284,36 @@ def get_detail_pipeline(user, type):
                     "as": "social_media"
                 }
             },
+            {
+  "$lookup": {
+    "from": "ArtistFollow",
+    "localField": "_id",
+    "foreignField": "artist",
+    "as": "artist_followers"
+  }
+  },
+  {
+  "$lookup": {
+    "from": "ArtistFollow",
+    "localField": "_id",
+    "foreignField": "user",
+    "as": "artist_following"
+  }
+  },
+  {
+  "$addFields": {
+    
+    "followers_count": {
+      "$size": "$artist_followers"
+    },
+    "following_count": {
+      "$size": "$artist_following"
+    }
+  }
+  },
+  {
+  "$unset": ["artist_followers", "artist_following"]
+  },
        
 ]
     elif(type=='venue'):
@@ -231,6 +326,14 @@ def get_detail_pipeline(user, type):
             {
             "$unset": ["password", "devices"]  
         },
+        {
+                "$lookup": {
+                    "from": "RewardPoints",
+                    "localField": "_id",
+                    "foreignField": "user",
+                    "as": "points_detail"
+                }
+            },
     {
                 "$lookup": {
                     "from": "Venue",
@@ -247,6 +350,25 @@ def get_detail_pipeline(user, type):
                     "as": "social_media"
                 }
             },
+            {
+        "$lookup": {
+            "from": "ArtistFollow",
+            "localField": "_id",
+            "foreignField": "user",
+            "as": "artist_following"
+        }
+        },
+        {
+  "$addFields": {
+    
+    "following_count": {
+      "$size": "$artist_following"
+    }
+  }
+  },
+  {
+            "$unset": ["artist_following"]  
+        },
         ]
     
     else:
@@ -258,7 +380,31 @@ def get_detail_pipeline(user, type):
                 
             },
             {
-            "$unset": ["password", "devices"]  
+                "$lookup": {
+                    "from": "RewardPoints",
+                    "localField": "_id",
+                    "foreignField": "user",
+                    "as": "points_detail"
+                }
+            },
+                    {
+        "$lookup": {
+            "from": "ArtistFollow",
+            "localField": "_id",
+            "foreignField": "user",
+            "as": "artist_following"
+        }
+        },
+        {
+  "$addFields": {
+    
+    "following_count": {
+      "$size": "$artist_following"
+    }
+  }
+  },
+            {
+            "$unset": ["password", "devices","artist_following"]  
         },
     
         ]

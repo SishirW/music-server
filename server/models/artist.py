@@ -144,7 +144,7 @@ async def get_artist_info(db, id):
 
 async def get_artist_byid(db, id, user_id):
     pipeline= get_artist_detail_pipeline(id, user_id) 
-    artist =await db[collection_name].aggregate(pipeline).to_list(1)
+    artist =await db[collection_name].aggregate(pipeline).to_list(10)
     if artist==[]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                              detail=f"artist not found!")

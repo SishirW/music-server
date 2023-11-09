@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from ..schemas import AddToCart, OrderProduct, ShowCart, ShowProduct, ShowProductCart, ShowUser
 from .user import get_current_user, validate_admin
 import requests
-from ..background_tasks import send_notification
+from ..utils.background_tasks import send_notification
 
 router = APIRouter(prefix="/order", tags=["Product orders"])
 

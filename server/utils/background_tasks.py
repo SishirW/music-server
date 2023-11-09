@@ -4,13 +4,16 @@ from firebase_admin import messaging, credentials
 import os
 import json
 
+import smtplib
+from email.mime.text import MIMEText
+
 
 def send_notification(tokens, detail, type, title, body):
-    print(detail)
+    print(tokens)
     cwd = os.getcwd()
     print(cwd)
     cred = credentials.Certificate(
-        f"{cwd}\server\music-5e4d7-firebase-adminsdk-owp1r-6e510201d4.json")
+        f"{cwd}\server\musecstacy-92e6a-firebase-adminsdk-6zn68-7d46fedb28.json")
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
 
@@ -52,3 +55,18 @@ def send_notification(tokens, detail, type, title, body):
 #     url = "https://fcm.googleapis.com/fcm/send"
 #     response = requests.request("POST", url, headers=headers, data=detail)
 #     print(response.json())
+
+async def send_email(email: str, message: str):
+
+    smtp_server = smtplib.SMTP('smtp-mail.outlook.com', 587)
+    smtp_server.ehlo()
+    smtp_server.starttls()
+    smtp_server.login("", "")
+    print('--------')
+    msg = MIMEText(message)
+    msg["Subject"] = "Confirmation Code for account creation"
+    msg["To"] = email
+    msg["From"] = ""
+
+    smtp_server.send_message(msg)
+    return "Email sent successfully!"
