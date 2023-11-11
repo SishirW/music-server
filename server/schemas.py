@@ -167,6 +167,7 @@ class AddToCart(BaseModel):
 class ShowUserWithId(ShowUser):
     id: str = Field(alias='_id')
     type: str
+    username: str
 
 
 class Token(BaseModel):

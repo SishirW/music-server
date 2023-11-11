@@ -1,4 +1,4 @@
-from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
+from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile, BackgroundTasks
 from typing import List
 from fastapi.encoders import jsonable_encoder
 from server.db import get_database
@@ -7,14 +7,23 @@ from ..utils.user import get_current_user, validate_admin
 from server.schemas import ShowUserWithId
 from server.models.used_products import get_product_request,request_for_buying,delete_product,get_user_product,get_product_byid,get_product_question,add_product, delete_images,add_images, get_relevant_product, add_question,add_response_to_qn
 from server.schemas_new.products import CreateQuestionSchema, CreateQuestionResponseSchema
+from ..utils.background_tasks import send_notification
+
 router = APIRouter(prefix="/usedproducts", tags=["Used Products"])
 
 
 
 @router.post('/')
-async def add_new_product(request: Request, product: CreateUsedProductSchema, current_user: ShowUserWithId = Depends(get_current_user)):
+async def add_new_product(request: Request, product: CreateUsedProductSchema, background_tasks: BackgroundTasks,current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_product(db, product,current_user['_id'])
+    admin = await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+
+    devices = []
+    for users in admin:
+        devices.append(users['devices'])
+    background_tasks.add_task(send_notification, tokens=devices, detail={}, type='new-used-product',
+                              title='Used Product', body='{} has added a new used product:  \nName: {}'.format(current_user['full_name'], result['name']))
     return jsonable_encoder(result)
 
 @router.post('/question')
@@ -24,9 +33,17 @@ async def add_new_question(request: Request,question: CreateQuestionSchema, curr
     return jsonable_encoder(result)
 
 @router.post('/request')
-async def request_to_buy(request: Request,question: RequestToBuy, current_user: ShowUserWithId = Depends(get_current_user)):
+async def request_to_buy(request: Request,question: RequestToBuy,background_tasks: BackgroundTasks, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await request_for_buying(db, question, current_user['_id'])
+
+    admin = await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+
+    devices = []
+    for users in admin:
+        devices.append(users['devices'])
+    background_tasks.add_task(send_notification, tokens=devices, detail={'requests': result['request'], 'product': result['products']},
+                              type='used-product-request', title='Used Product Request', body='User {} has requested to buy {}'.format(current_user['full_name'], result['products']['name']))
     return jsonable_encoder(result)
 
 

@@ -1,4 +1,4 @@
-from fastapi import Request, HTTPException,APIRouter,Depends
+from fastapi import Request, HTTPException,APIRouter,Depends,BackgroundTasks
 from fastapi import status
 from fastapi.encoders import jsonable_encoder
 from server.db import get_database
@@ -6,11 +6,20 @@ from ..utils.user import  validate_admin, get_current_user
 from server.schemas import ShowUserWithId
 from server.models.orders import place_order, get_relevant_order, change_order_status, get_user_order
 from server.schemas_new.orders import PlaceOrder
+from ..utils.background_tasks import send_notification
+
 router = APIRouter(prefix="/order", tags=["Order"])
 @router.post('/')
-async def order_product(request: Request, order: PlaceOrder, current_user: ShowUserWithId = Depends(get_current_user)):
+async def order_product(request: Request, order: PlaceOrder,background_tasks: BackgroundTasks, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await place_order(db, order,current_user['_id'])
+    admin = await request.app.mongodb['Users'].find({'type': 'admin'}).to_list(1000000)
+
+    devices = []
+    for users in admin:
+        devices.append(users['devices'])
+    background_tasks.add_task(send_notification, tokens=devices, detail={'id': str(
+        result['_id']), 'user_id': current_user['_id']}, type='orders', title='Order', body='New order by {}'.format(current_user['full_name']))
     return jsonable_encoder(result)
 
 @router.get('/')

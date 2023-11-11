@@ -1,4 +1,4 @@
-from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
+from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile,BackgroundTasks
 from typing import List
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
@@ -8,6 +8,7 @@ from ..utils.user import get_current_user, validate_venue, validate_admin
 from server.schemas import ShowUserWithId
 from server.db import get_database
 from server.models.venue import edit_social_media,get_venue_schedule,delete_images, edit_venue,delete_venue,invalid_package,get_venue_package,check_venue_exists,complete_booking,check_seat_available,get_venue_package_booking,get_venue_review,add_review,delete_schedule,edit_schedule,add_schedule,get_requested_venue,verify_venue,unverify_venue, feature_venue,unfeature_venue,add_venue,book_package,edit_package,delete_package,add_package,add_images, get_venue_by_userid, get_venue_byid,get_relevant_venue, get_featured_venue
+from ..utils.background_tasks import send_notification
 
 router = APIRouter(prefix="/venue", tags=["Venue"])
 
@@ -39,9 +40,15 @@ async def add_new_schedule(request: Request, schedule: CreateScheduleSchema, cur
     return jsonable_encoder(result)
 
 @router.post('/review')
-async def add_new_review(request: Request,review: CreateReviewSchema, current_user: ShowUserWithId = Depends(get_current_user)):
+async def add_new_review(request: Request,review: CreateReviewSchema,background_tasks: BackgroundTasks, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await add_review(db, review, current_user['_id'])
+    print(result)
+    user = await request.app.mongodb['Users'].find_one({'_id': result[0]['user_id']})
+    if user['devices']!= '' and user['devices']!=None:
+        devices = []
+        devices.append(user['devices'])   
+        background_tasks.add_task(send_notification, tokens=devices, detail=result[0], type='venue_review', title='Your venue has been rated {} by {}'.format(review.rating, current_user['username']), body='Artist has followed you')
     return jsonable_encoder(result)
 
 @router.get('/')

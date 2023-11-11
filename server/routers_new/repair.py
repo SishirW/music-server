@@ -25,7 +25,7 @@ async def create_repair(request: Request, background_tasks: BackgroundTasks, rep
 
     devices = []
     for users in admin:
-        devices.extend(users['devices'])
+        devices.append(users['devices'])
     background_tasks.add_task(send_notification, tokens=devices, detail=repair, type='repair',
                               title='Repair', body='New repair request by {}'.format(current_user['full_name']))
     return {"success": True, "id": new_repair.inserted_id}

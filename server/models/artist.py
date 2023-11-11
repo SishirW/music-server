@@ -297,8 +297,9 @@ async def follow_artist(db, user, follow: FollowArtistSchema):
         user= user
     )
     encoded = jsonable_encoder(follow)
-    await db[follow_collection_name].insert_one(encoded)
-    return {'success': True}
+    result= await db[follow_collection_name].insert_one(encoded)
+    detail= await db[follow_collection_name].find_one({'_id': result.inserted_id})
+    return {'result': detail, 'artist': artist['user_id']}
 
 async def unfollow_artist(db, user, follow: FollowArtistSchema):
     artist= await check_artist_exists(db, follow.artist)

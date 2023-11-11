@@ -451,7 +451,9 @@ async def add_review(db, review: CreateReviewSchema, user):
     )
     encoded = jsonable_encoder(review)
     await db[review_collection_name].insert_one(encoded)
-    return {'success': True}
+    pipeline= get_pipeline_for_notification(review.venue)
+    venue =await db[collection_name].aggregate(pipeline).to_list(12)
+    return venue
 
 async def get_venue_review(db, id,page):
     venue= await check_venue_exists(db, id)
@@ -600,6 +602,9 @@ def get_pipeline(page):
     "$limit": 12
   }
 ]
+
+
+
 
 def get_search_pipeline(keyword, page):
     
@@ -881,5 +886,38 @@ def get_venue_package_pipeline(package, venue, page):
   {
   "$limit": 5
   }
+  
+]
+
+
+def get_pipeline_for_notification(id):
+    return [
+        {
+            "$match": {
+                "_id": id
+            }
+        },
+  {
+            "$lookup": {
+                "from": "VenueReview",
+                "localField": "_id",
+                "foreignField": "venue",
+                "as": "reviews"
+            }
+        },
+       {
+            "$addFields": {
+                "average_rating": {
+                    "$ifNull": [
+                        {"$avg": "$reviews.rating"},
+                        0
+                    ]
+                }
+            }
+        },
+        {
+            "$unset": "reviews"  
+        },
+  
   
 ]

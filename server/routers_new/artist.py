@@ -1,4 +1,4 @@
-from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile
+from fastapi import Request, HTTPException,APIRouter,status,Depends, UploadFile, BackgroundTasks
 from ..utils.user import validate_artist, get_current_user,validate_user_without_error, validate_admin
 from fastapi.encoders import jsonable_encoder
 from server.schemas_new.artist import EditSocialMedia,CreateArtistSchema, CreateScheduleSchema, EditScheduleSchema, FollowArtistSchema, EditArtistSchema
@@ -6,6 +6,8 @@ from server.db import get_database
 from server.models.artist import edit_social_media,get_artist_schedule,delete_artist,delete_images,edit_artist,get_artist_info,feature_artist,unfeature_artist,add_artist,get_follower,get_following,get_followers_count,unfollow_artist,follow_artist,edit_schedule,delete_schedule, add_schedule,get_artist_by_userid, Artist, get_artist_byid, get_featured_artist, get_relevant_artist,add_images
 from server.schemas import ShowUserWithId
 from typing import List
+from ..utils.background_tasks import send_notification
+from ..models.artist import collection_name
 
 router = APIRouter(prefix="/artist", tags=["Artist"])
 
@@ -23,9 +25,17 @@ async def add_new_schedule(request: Request, schedule: CreateScheduleSchema, cur
     return jsonable_encoder(result)
 
 @router.post('/follow', response_description='Follow artist')
-async def follow_artists(request: Request, follow: FollowArtistSchema, current_user: ShowUserWithId = Depends(get_current_user)):
+async def follow_artists(request: Request, follow: FollowArtistSchema, background_tasks: BackgroundTasks,current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result=await follow_artist(db, current_user['_id'], follow)
+    if current_user['type']== 'artist':
+        user = await request.app.mongodb['Users'].find_one({'_id': result['artist']})
+        user_artist= await db[collection_name].find_one({'user_id': result['artist']})
+        print(user_artist)
+        devices = []
+        devices.append(user['devices'])   
+        background_tasks.add_task(send_notification, tokens=devices, detail={'id': str(
+            user_artist['_id'])}, type='followed-by-artist', title='Followed by artist', body='Artist {} has followed you'.format(user_artist['alias']))
     return jsonable_encoder(result)
 
 @router.get('/')

@@ -114,7 +114,7 @@ async def add_question(db, question: CreateQuestionSchema, user):
 async def request_for_buying(db, buying: RequestToBuy, user):
     product= await get_product_byid(db, buying.product_id)
 
-    question= UsedProductRequest(
+    req= UsedProductRequest(
         product=buying.product_id,
         name= buying.name,
         phone_no= buying.phone_no,
@@ -122,9 +122,10 @@ async def request_for_buying(db, buying: RequestToBuy, user):
         user= user,
         seller= product['user']
     )
-    encoded = jsonable_encoder(question)
-    await db[request_collection_name].insert_one(encoded)
-    return {'success': True}
+    encoded = jsonable_encoder(req)
+    result= await db[request_collection_name].insert_one(encoded)
+    detail= await db[request_collection_name].find_one({'_id': result.inserted_id})
+    return {'products': product, 'request': detail}
 
 
 
