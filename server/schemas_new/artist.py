@@ -12,6 +12,7 @@ class CreateArtistSchema(BaseModel):
     #images: List[str]= Field(...)
     video: Optional[HttpUrl]
     social_media: CreateSocialMedia
+    is_instructor: Optional[bool]
 
 class EditArtistSchema(BaseModel):
     alias: Optional[str]
@@ -22,6 +23,7 @@ class EditArtistSchema(BaseModel):
     looking_for: Optional[List[str]]
     #images: List[str]= Field(...)
     video: Optional[HttpUrl]
+    is_instructor: Optional[bool]
 
     #social_media: CreateSocialMedia
 

@@ -15,7 +15,6 @@ class CreateUserSchema(BaseModel):
     email: EmailStr = Field(...)
     password: str = Field(...)
     phone_no: Optional[str]
-    is_instructor: Optional[bool]
 
 class UserDetail(BaseModel):
     full_name: str

@@ -46,6 +46,7 @@ class Artist(BaseModel):
     video: HttpUrl= None
     user_id: str= Field(...)
     social_accounts: str
+    is_instructor: bool= False
 
 
 async def add_artist(db, artist, user):
@@ -69,7 +70,8 @@ async def add_artist(db, artist, user):
         location=artist.location,
         looking_for=artist.looking_for,
         video= artist.video,
-        social_accounts= social_media_id
+        social_accounts= social_media_id, 
+        is_instructor=artist.is_instructor,
     )
     encoded = jsonable_encoder(artist1)
     insert_artist= await db[collection_name].insert_one(encoded)

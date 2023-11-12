@@ -6,7 +6,6 @@ from fastapi import HTTPException, status
 from .products import check_product_exists
 from server.schemas_new.cart import AddToCart
 
-
 collection_name= 'Cart'
 
 class Cart(BaseModel):
@@ -19,10 +18,10 @@ async def create_cart(db, cart: AddToCart, user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"Product not found!")
     old_cart= await check_product_exists_in_cart(db, cart.product, user)
-    print(old_cart)
     if old_cart is not None:
         await db[collection_name].update_one({'_id': old_cart['_id']},{'$set': {'count': cart.count+ old_cart['count']}})
-        return {'success': True}
+        return_cart= await db[collection_name].find({'user': user}).to_list(None)
+        return {'items_in_cart': len(return_cart)}
     cart_to_add= Cart(
         product= cart.product,
         count= cart.count,
@@ -30,7 +29,8 @@ async def create_cart(db, cart: AddToCart, user):
     )
     encoded = jsonable_encoder(cart_to_add)
     await db[collection_name].insert_one(encoded)
-    return {'success': True}
+    return_cart= await db[collection_name].find({'user': user}).to_list(None)
+    return {'items_in_cart': len(return_cart)}
 
 async def check_product_exists_in_cart(db ,product, user):
     cart = await db[collection_name].find_one({"product": product, "user":user})

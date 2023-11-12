@@ -12,6 +12,7 @@ router = APIRouter(prefix="/cart", tags=["Cart"])
 async def add_to_cart(request: Request, cart: AddToCart, current_user: ShowUserWithId = Depends(get_current_user)):
     db = get_database(request)
     result = await create_cart(db, cart,current_user['_id'])
+    print(result)
     return jsonable_encoder(result)
 
 

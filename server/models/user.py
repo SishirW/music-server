@@ -4,10 +4,10 @@ from pydantic import EmailStr, Field
 from .bands import Location
 from datetime import datetime
 from fastapi.encoders import jsonable_encoder
-from fastapi import HTTPException,status
+from fastapi import HTTPException,status, BackgroundTasks
 from ..utils.password_methods import get_password_hash
 from ..utils.user import randomDigits, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, timedelta
-
+from ..utils.background_tasks import send_email
 
 
 collection_name = "Users"
@@ -46,7 +46,6 @@ class User(BaseModel):
     devices: List[str]= []
     points: int =0
     social_links: Optional[SocialMedia]
-    is_instructor: bool=False
 
 
 async def create_user(db, user):
@@ -65,7 +64,6 @@ async def create_user(db, user):
         email= user.email,
         password= get_password_hash(user.password),
         phone_no= user.phone_no,
-        is_instructor= user.is_instructor,
     )
     encoded = jsonable_encoder(user1)
     print(encoded)
@@ -76,6 +74,7 @@ async def create_user(db, user):
     # new_user = await find_band_by_id(db, str(bnd.id), user)
     # return new_band
     
+
     return {'_id': user_entry.inserted_id, 'email': user.email, 'verification_number': verification_number}
 
 

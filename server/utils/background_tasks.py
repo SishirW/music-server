@@ -3,9 +3,12 @@ import firebase_admin
 from firebase_admin import messaging, credentials
 import os
 import json
-
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+import os
 import smtplib
 from email.mime.text import MIMEText
+from pathlib import Path
 
 
 def send_notification(tokens, detail, type, title, body):
@@ -57,16 +60,22 @@ def send_notification(tokens, detail, type, title, body):
 #     print(response.json())
 
 async def send_email(email: str, message: str):
+    
+    load_dotenv()
+    sender_email = os.environ.get("email")
+    sender_password = os.environ.get("password")
+    mail_smtp = os.environ.get("mailsmtp")
+    port = os.environ.get("port")
+    message_to_send = MIMEMultipart()
+    message_to_send['From'] = sender_email
+    message_to_send['To'] = email
+    message_to_send['Subject'] = "Confirmation Code for account creation"
+    message_to_send.attach(MIMEText(str(message), 'plain'))
+    
 
-    smtp_server = smtplib.SMTP('smtp-mail.outlook.com', 587)
-    smtp_server.ehlo()
-    smtp_server.starttls()
-    smtp_server.login("", "")
-    print('--------')
-    msg = MIMEText(message)
-    msg["Subject"] = "Confirmation Code for account creation"
-    msg["To"] = email
-    msg["From"] = ""
 
-    smtp_server.send_message(msg)
-    return "Email sent successfully!"
+    with smtplib.SMTP(mail_smtp, port) as server:
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, email, message_to_send.as_string())
+    print('complete')

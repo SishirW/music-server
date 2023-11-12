@@ -46,6 +46,7 @@ async def add_product(db, product, user):
        category= category
    )
     encoded = jsonable_encoder(product1)
+    print(encoded)
     add_product= await db[collection_name].insert_one(encoded)
     detail= await db[collection_name].find_one({'_id': add_product.inserted_id})
     return detail
