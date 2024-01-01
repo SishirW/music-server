@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
 from datetime import datetime, timedelta
 from ..utils.password_methods import verify_password
+from typing import Optional
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from ..routers.user import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from ..routers.user import randomDigits
 from ..routers.user import send_email
 from pydantic import BaseModel, Field
+from ..models.user import add_verification_token
+from server.db import get_database
 router = APIRouter(tags=['Authentication'])
 
 class UserDetail(BaseModel):
@@ -14,8 +17,8 @@ class UserDetail(BaseModel):
     email: str
     full_name: str
     type: str
-    location: str
-    phone_no: str
+    location: Optional[str]
+    phone_no: Optional[str]
 
 class Token(BaseModel):
     access_token: str
@@ -24,6 +27,7 @@ class Token(BaseModel):
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(request: Request, background_tasks: BackgroundTasks, form_data: OAuth2PasswordRequestForm = Depends()):
+    db = get_database(request)
     token = request.headers.get('device-token')
     user = await request.app.mongodb['Users'].find_one({'username': form_data.username})
     if user is None:
@@ -37,7 +41,7 @@ async def login_for_access_token(request: Request, background_tasks: BackgroundT
     validation_number = randomDigits(5)
     created_at = datetime.now()
     if user['verified'] == False:
-        await request.app.mongodb['Users'].update_one({'username': form_data.username}, {'$push': {'validation_token': {'number': validation_number, 'created_at': str(created_at)}}})
+        await add_verification_token(db, user['_id'], validation_number)
         background_tasks.add_task(
             send_email, email=user['email'], message=f'Your Confirmation code is {validation_number} .')
 

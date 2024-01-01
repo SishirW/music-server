@@ -41,8 +41,8 @@ class User(BaseModel):
     password: str = Field(...)
     verified: bool = False
     type: str= 'user'
-    location: Optional[str] = ''
-    phone_no: Optional[str] = ''
+    location: Optional[str] 
+    phone_no: Optional[str] 
     devices: List[str]= []
     points: int =0
     social_links: Optional[SocialMedia]
@@ -113,9 +113,9 @@ async def verify_user(db, user, token):
     difference_in_hour= calculate_difference_in_hour(datetime.strptime(token_detail['created_at'], '%Y-%m-%dT%H:%M:%S.%f'))
 
     if token== token_detail['token'] and token_detail['valid']:
-        if difference_in_hour < 2: 
-            r = await db[collection_name].update_one({'_id': user}, {'$set': {'verified': True}})
-            return get_login_token_after_verification(user_check)
+        # if difference_in_hour < 2: 
+        r = await db[collection_name].update_one({'_id': user}, {'$set': {'verified': True}})
+        return get_login_token_after_verification(user_check)
         await db[verification_collection_name].update_one({'_id': token_detail['_id']}, {'$set': {'valid': 'False'}})
     raise HTTPException(
                     status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="Expired code",) 
