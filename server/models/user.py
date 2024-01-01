@@ -120,7 +120,7 @@ async def verify_user(db, user, token):
         datetime.strptime(token_detail['created_at'], '%Y-%m-%dT%H:%M:%S.%f'))
 
     if token == token_detail['token'] and token_detail['valid']:
-        if difference_in_hour < 24*6:
+        if difference_in_hour < 24*600:
             r = await db[collection_name].update_one({'_id': user}, {'$set': {'verified': True}})
             return get_login_token_after_verification(user_check)
         await db[verification_collection_name].update_one({'_id': token_detail['_id']}, {'$set': {'valid': 'False'}})
