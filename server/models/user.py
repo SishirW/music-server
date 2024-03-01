@@ -181,6 +181,16 @@ async def delete_user_by_id(db, id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"User not found")
 
+async def delete_logged_in_user(db, id, type):
+    if type!= 'admin':
+        await db[collection_name].delete_one({'_id': id})
+    if type=='artist':
+        artist=await db['Artist'].delete_one({'user_id': id}) 
+    if type=='venue':
+        artist=await db['Venue'].delete_one({'user_id': id})   
+    
+
+
 
 async def edit_user_details(db, id, user_info):
     user_info = {k: v for k, v in user_info.dict().items() if v is not None}
