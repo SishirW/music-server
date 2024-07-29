@@ -30,8 +30,8 @@ app.add_middleware(
 
 # connection_string = "mongodb+srv://SishirW:JAkJaCmAPcxLoZn8@music.ohrew.mongodb.net/?retryWrites=true&w=majority"
 # connection_string = "mongodb://0.0.0.0:27017"
-connection_string = "mongodb://localhost:27017"
-#connection_string = "mongodb+srv://musecstacy:Zmkh0XoXKIeBgAoI@cluster0.pdfd9si.mongodb.net"
+#connection_string = "mongodb://localhost:27017"
+connection_string = "mongodb+srv://musecstacy:Zmkh0XoXKIeBgAoI@cluster0.pdfd9si.mongodb.net"
 # connection_string = "mongodb+srv://user:LAAAPFukxhKyQoHq@music-app.lnlw82c.mongodb.net/test"
 
 
