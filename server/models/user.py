@@ -45,6 +45,11 @@ class User(BaseModel):
     email: EmailStr = Field(...)
     password: str = Field(...)
     verified: bool = False
+    type: str= 'user'
+    location: Optional[str] 
+    phone_no: Optional[str] 
+    devices: List[str]= []
+    points: int =0
     type: str = 'user'
     location: Optional[str] = ''
     phone_no: Optional[str] = ''
@@ -119,6 +124,10 @@ async def verify_user(db, user, token):
     difference_in_hour = calculate_difference_in_hour(
         datetime.strptime(token_detail['created_at'], '%Y-%m-%dT%H:%M:%S.%f'))
 
+    if token== token_detail['token'] and token_detail['valid']:
+        # if difference_in_hour < 2: 
+        r = await db[collection_name].update_one({'_id': user}, {'$set': {'verified': True}})
+        return get_login_token_after_verification(user_check)
     if token == token_detail['token'] and token_detail['valid']:
         if difference_in_hour < 24*600:
             r = await db[collection_name].update_one({'_id': user}, {'$set': {'verified': True}})
